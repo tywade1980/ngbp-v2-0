@@ -6,6 +6,18 @@ A comprehensive, intuitive Android native application for home construction mana
 
 Construction Manager is designed to mirror the natural workflow of home construction, from pre-construction planning to project handover. The app provides minimal-tap workflows with intelligent design patterns that construction industry professionals will find intuitive and efficient.
 
+## 🎯 Quick Start - Demo Access
+
+**Want to try the app immediately?** Use these demo credentials:
+
+- **Email**: `demo@constructionmanager.com`
+- **Password**: `demo123`
+- **Alternative**: Tap "Continue as Demo User" button for instant access
+
+The demo account provides full access to all Professional tier features with sample construction data.
+
+👉 **[View Complete Demo Guide](DEMO.md)** for detailed demo features and usage instructions.
+
 ## ✨ Key Features
 
 ### 📊 **Comprehensive Dashboard**
@@ -136,6 +148,33 @@ The app includes comprehensive, current construction material pricing data:
 
 ## 🚀 Getting Started
 
+### **Demo Login Credentials**
+
+The app includes a demo login feature for immediate testing and exploration:
+
+**Demo Credentials:**
+- **Email**: `demo@constructionmanager.com`
+- **Password**: `demo123`
+
+**Demo User Details:**
+- **Name**: Demo Manager
+- **Company**: Demo Construction Co.
+- **Role**: Project Manager
+- **Subscription**: Professional Tier
+- **Region**: Midwest
+
+**How to Use Demo Login:**
+1. Launch the app
+2. The login fields are pre-filled with demo credentials
+3. Either tap "Sign In" with the pre-filled credentials, or
+4. Tap "Continue as Demo User" button for instant access
+
+**Demo Features:**
+- Full access to all Professional tier features
+- Pre-populated with sample construction data
+- All functionality available except email notifications
+- Perfect for testing all app capabilities
+
 ### **Prerequisites**
 - Android Studio Iguana | 2023.2.1 or newer
 - Android SDK 34 (API level 34)
@@ -239,6 +278,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **UX/UI Design**: Construction workflow specialists
 
 ## 🆘 Support
+
+### **Demo Login Issues**
+If you encounter problems with the demo login:
+- **Credentials not working**: Ensure you're using exactly `demo@constructionmanager.com` and `demo123`
+- **App not loading**: Try the "Continue as Demo User" button instead
+- **Features missing**: Verify you're logged in as Demo Manager with Professional tier
+- **Data seems wrong**: Demo data resets each session - this is expected behavior
 
 For technical support, feature requests, or industry-specific questions:
 - **Issues**: Use GitHub Issues for bug reports and feature requests
