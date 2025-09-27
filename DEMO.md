@@ -65,27 +65,37 @@ When you log in with the demo account, you'll be signed in as:
 
 ### **Dashboard Overview**
 - Active construction projects with real progress data
-- Budget vs. actual cost tracking
-- Phase distribution charts
-- Recent activity timeline
-- Quick action buttons for common tasks
+- Budget vs. actual cost tracking with visual indicators
+- Phase distribution charts showing project stages
+- Recent activity timeline with recent changes
+- Quick action buttons for creating projects, adding materials, logging labor
 
-### **Sample Projects**
-- **Residential Home Build**: 2,400 sq ft home in framing phase
-- **Kitchen Renovation**: Commercial-grade kitchen upgrade
-- **Office Building**: Multi-phase commercial construction
+### **Sample Projects Available**
+- **Residential Home Build**: Multi-phase construction project
+- **Kitchen Renovation**: Commercial-grade upgrade project  
+- **Office Building**: Complex commercial construction
+- Various projects in different phases (Planning, Active, Completed)
 
 ### **Material Catalog Preview**
 - Current 2025 pricing for construction materials
-- Regional price variations (Midwest focus)
-- 25+ categories from lumber to specialty hardware
+- Regional price variations (Midwest pricing focus)
+- 25+ categories: Lumber, Concrete, Steel, Roofing, Electrical, Plumbing, HVAC, Windows, Doors, Hardware, Fixtures
 - Supplier information and SKU details
+- Advanced search and filtering capabilities
 
 ### **Labor Management Demo**
-- Sample workforce with various trade skills
-- Time tracking examples with overtime calculations
+- Sample workforce with various trade skills (23+ trade types)
+- Skill levels: Apprentice, Journeyman, Master, Specialist, Supervisor
+- Time tracking examples with regular and overtime calculations
 - Cost analysis by trade and project phase
-- Worker profiles with contact information
+- Worker profiles with contact information and certifications
+
+### **Photo Documentation System**
+- Progress photography organized by construction phase
+- Safety compliance documentation examples
+- Quality control checkpoint photos
+- Material delivery and verification photos
+- Before/after comparison galleries
 
 ## 🔄 Logging Out and Data Reset
 
