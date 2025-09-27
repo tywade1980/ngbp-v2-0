@@ -24,6 +24,10 @@ import com.constructionmanager.ui.components.RecentProjectCard
 fun DashboardScreen(
     onNavigateToProjects: () -> Unit,
     onNavigateToMaterials: () -> Unit,
+    onNavigateToLabor: () -> Unit = {},
+    onNavigateToWorkflows: () -> Unit = {},
+    onNavigateToReports: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -111,16 +115,30 @@ fun DashboardScreen(
                     }
                     item {
                         QuickActionCard(
-                            title = "Time Tracking",
-                            icon = Icons.Default.Schedule,
-                            onClick = { /* Navigate to time tracking */ }
+                            title = "Labor",
+                            icon = Icons.Default.People,
+                            onClick = onNavigateToLabor
+                        )
+                    }
+                    item {
+                        QuickActionCard(
+                            title = "Workflows",
+                            icon = Icons.Default.Timeline,
+                            onClick = onNavigateToWorkflows
                         )
                     }
                     item {
                         QuickActionCard(
                             title = "Reports",
                             icon = Icons.Default.Assessment,
-                            onClick = { /* Navigate to reports */ }
+                            onClick = onNavigateToReports
+                        )
+                    }
+                    item {
+                        QuickActionCard(
+                            title = "Settings",
+                            icon = Icons.Default.Settings,
+                            onClick = onNavigateToSettings
                         )
                     }
                 }

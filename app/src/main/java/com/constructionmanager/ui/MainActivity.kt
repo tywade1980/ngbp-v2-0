@@ -7,8 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.constructionmanager.ui.navigation.ConstructionManagerNavigation
+import com.constructionmanager.ui.screens.auth.LoginViewModel
 import com.constructionmanager.ui.theme.ConstructionManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -19,12 +22,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ConstructionManagerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ConstructionManagerNavigation(
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                MainContent()
             }
         }
+    }
+}
+
+@Composable
+private fun MainContent() {
+    val loginViewModel: LoginViewModel = hiltViewModel()
+    val loginUiState by loginViewModel.uiState.collectAsState()
+    
+    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        ConstructionManagerNavigation(
+            modifier = Modifier.padding(innerPadding),
+            isAuthenticated = loginUiState.isAuthenticated
+        )
     }
 }
