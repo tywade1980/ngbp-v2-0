@@ -4,9 +4,9 @@ package com.constructionmanager.ui.screens.workflows;
 public final class WorkflowScreenKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void WorkflowScreen(@org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.Nullable
+    @androidx.compose.runtime.Composable()
+    public static final void WorkflowScreen(@org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.Nullable()
     java.lang.String projectId) {
     }
 }

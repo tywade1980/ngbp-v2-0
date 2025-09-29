@@ -4,17 +4,7 @@
             "outputFile": "com.constructionmanager.app-mergeDebugResources-67:/values-v23/values-v23.xml",
             "map": [
                 {
-                    "source": "/home/runner/.gradle/caches/transforms-3/880c0e5669fe20e5d152a4c5dd22d3a7/transformed/work-runtime-2.9.0/res/values-v23/values-v23.xml",
-                    "from": {
-                        "startLines": "2,3",
-                        "startColumns": "4,4",
-                        "startOffsets": "55,121",
-                        "endColumns": "65,62",
-                        "endOffsets": "116,179"
-                    }
-                },
-                {
-                    "source": "/home/runner/.gradle/caches/transforms-3/9db0338f2e5db5c05c97e8cd0b2f30f1/transformed/appcompat-1.6.1/res/values-v23/values-v23.xml",
+                    "source": "/home/runner/.gradle/caches/transforms-3/151dd190459c956cbe3f1d48f1ad95ec/transformed/appcompat-1.6.1/res/values-v23/values-v23.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,20,34,35,36,39,43,44,45,46",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -30,6 +20,16 @@
                         "endLines": "4,5,6,7,21,35,36,37,40,44,45,46,47,51",
                         "endColumns": "134,134,74,86,12,12,118,126,12,12,114,106,112,12",
                         "endOffsets": "314,449,524,611,1349,2099,2218,2345,2567,2791,2906,3013,3126,3356"
+                    }
+                },
+                {
+                    "source": "/home/runner/.gradle/caches/transforms-3/531c41bfc83a6d18724a9f91c1ceb32b/transformed/work-runtime-2.9.0/res/values-v23/values-v23.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,121",
+                        "endColumns": "65,62",
+                        "endOffsets": "116,179"
                     }
                 }
             ]

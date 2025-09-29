@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.constructionmanager.ui.screens.labor
 
 import androidx.compose.foundation.layout.*

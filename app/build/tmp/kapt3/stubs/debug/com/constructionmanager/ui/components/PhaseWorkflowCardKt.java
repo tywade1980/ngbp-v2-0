@@ -4,15 +4,15 @@ package com.constructionmanager.ui.components;
 public final class PhaseWorkflowCardKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void PhaseWorkflowCard(@org.jetbrains.annotations.NotNull
-    com.constructionmanager.ui.screens.workflows.WorkflowPhase workflowPhase, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull
-    androidx.compose.ui.Modifier modifier, @org.jetbrains.annotations.Nullable
+    @androidx.compose.runtime.Composable()
+    public static final void PhaseWorkflowCard(@org.jetbrains.annotations.NotNull()
+    com.constructionmanager.ui.screens.workflows.WorkflowPhase workflowPhase, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull()
+    androidx.compose.ui.Modifier modifier, @org.jetbrains.annotations.Nullable()
     java.lang.String projectId, boolean isCompleted, boolean isActive) {
     }
     
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void TaskChip(java.lang.String task, boolean isCompleted, boolean isActive) {
     }
 }

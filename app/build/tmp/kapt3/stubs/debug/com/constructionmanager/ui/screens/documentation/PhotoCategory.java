@@ -12,7 +12,7 @@ public enum PhotoCategory {
     PhotoCategory() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.ui.screens.documentation.PhotoCategory> getEntries() {
         return null;
     }

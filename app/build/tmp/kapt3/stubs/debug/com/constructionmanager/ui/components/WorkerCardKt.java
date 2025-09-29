@@ -4,14 +4,14 @@ package com.constructionmanager.ui.components;
 public final class WorkerCardKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void WorkerCard(@org.jetbrains.annotations.NotNull
-    com.constructionmanager.domain.model.Worker worker, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void WorkerCard(@org.jetbrains.annotations.NotNull()
+    com.constructionmanager.domain.model.Worker worker, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull()
     androidx.compose.ui.Modifier modifier) {
     }
     
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void SkillLevelChip(com.constructionmanager.domain.model.SkillLevel skillLevel) {
     }
     

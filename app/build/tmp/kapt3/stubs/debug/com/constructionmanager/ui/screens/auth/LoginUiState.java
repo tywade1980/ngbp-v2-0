@@ -4,16 +4,16 @@ package com.constructionmanager.ui.screens.auth;
 public final class LoginUiState {
     private final boolean isLoading = false;
     private final boolean isAuthenticated = false;
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     private final java.lang.String error = null;
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     private final java.lang.String userEmail = null;
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     private final java.lang.String userName = null;
     
-    public LoginUiState(boolean isLoading, boolean isAuthenticated, @org.jetbrains.annotations.Nullable
-    java.lang.String error, @org.jetbrains.annotations.Nullable
-    java.lang.String userEmail, @org.jetbrains.annotations.Nullable
+    public LoginUiState(boolean isLoading, boolean isAuthenticated, @org.jetbrains.annotations.Nullable()
+    java.lang.String error, @org.jetbrains.annotations.Nullable()
+    java.lang.String userEmail, @org.jetbrains.annotations.Nullable()
     java.lang.String userName) {
         super();
     }
@@ -26,17 +26,17 @@ public final class LoginUiState {
         return false;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String getError() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String getUserEmail() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String getUserName() {
         return null;
     }
@@ -53,42 +53,42 @@ public final class LoginUiState {
         return false;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String component3() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String component4() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String component5() {
         return null;
     }
     
-    @org.jetbrains.annotations.NotNull
-    public final com.constructionmanager.ui.screens.auth.LoginUiState copy(boolean isLoading, boolean isAuthenticated, @org.jetbrains.annotations.Nullable
-    java.lang.String error, @org.jetbrains.annotations.Nullable
-    java.lang.String userEmail, @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.NotNull()
+    public final com.constructionmanager.ui.screens.auth.LoginUiState copy(boolean isLoading, boolean isAuthenticated, @org.jetbrains.annotations.Nullable()
+    java.lang.String error, @org.jetbrains.annotations.Nullable()
+    java.lang.String userEmail, @org.jetbrains.annotations.Nullable()
     java.lang.String userName) {
         return null;
     }
     
-    @java.lang.Override
-    public boolean equals(@org.jetbrains.annotations.Nullable
+    @java.lang.Override()
+    public boolean equals(@org.jetbrains.annotations.Nullable()
     java.lang.Object other) {
         return false;
     }
     
-    @java.lang.Override
+    @java.lang.Override()
     public int hashCode() {
         return 0;
     }
     
-    @java.lang.Override
-    @org.jetbrains.annotations.NotNull
+    @java.lang.Override()
+    @org.jetbrains.annotations.NotNull()
     public java.lang.String toString() {
         return null;
     }

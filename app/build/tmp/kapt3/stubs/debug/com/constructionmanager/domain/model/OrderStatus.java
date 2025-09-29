@@ -12,7 +12,7 @@ public enum OrderStatus {
     OrderStatus() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.domain.model.OrderStatus> getEntries() {
         return null;
     }

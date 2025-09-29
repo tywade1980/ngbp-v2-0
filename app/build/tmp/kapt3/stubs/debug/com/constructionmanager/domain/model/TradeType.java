@@ -29,7 +29,7 @@ public enum TradeType {
     TradeType() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.domain.model.TradeType> getEntries() {
         return null;
     }

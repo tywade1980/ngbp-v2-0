@@ -4,19 +4,19 @@ package com.constructionmanager.ui.screens.documentation;
 public final class PhotoDocumentationScreenKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void PhotoDocumentationScreen(@org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void PhotoDocumentationScreen(@org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.NotNull()
     java.lang.String projectId) {
     }
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void PhotoCategorySummaryCard(com.constructionmanager.ui.screens.documentation.PhotoCategory category, int photoCount, boolean isSelected, kotlin.jvm.functions.Function0<kotlin.Unit> onClick) {
     }
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void PhotoDocumentationCard(com.constructionmanager.ui.screens.documentation.PhotoEntry photoEntry, kotlin.jvm.functions.Function0<kotlin.Unit> onClick) {
     }
     

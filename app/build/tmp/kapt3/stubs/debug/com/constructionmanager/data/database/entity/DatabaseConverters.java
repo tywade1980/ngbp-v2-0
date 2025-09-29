@@ -7,30 +7,30 @@ public final class DatabaseConverters {
         super();
     }
     
-    @androidx.room.TypeConverter
-    @org.jetbrains.annotations.NotNull
-    public final java.lang.String fromSpecificationsMap(@org.jetbrains.annotations.NotNull
+    @androidx.room.TypeConverter()
+    @org.jetbrains.annotations.NotNull()
+    public final java.lang.String fromSpecificationsMap(@org.jetbrains.annotations.NotNull()
     java.util.Map<java.lang.String, java.lang.String> value) {
         return null;
     }
     
-    @androidx.room.TypeConverter
-    @org.jetbrains.annotations.NotNull
-    public final java.util.Map<java.lang.String, java.lang.String> toSpecificationsMap(@org.jetbrains.annotations.NotNull
+    @androidx.room.TypeConverter()
+    @org.jetbrains.annotations.NotNull()
+    public final java.util.Map<java.lang.String, java.lang.String> toSpecificationsMap(@org.jetbrains.annotations.NotNull()
     java.lang.String value) {
         return null;
     }
     
-    @androidx.room.TypeConverter
-    @org.jetbrains.annotations.NotNull
-    public final java.lang.String fromRegionalPricingMap(@org.jetbrains.annotations.NotNull
+    @androidx.room.TypeConverter()
+    @org.jetbrains.annotations.NotNull()
+    public final java.lang.String fromRegionalPricingMap(@org.jetbrains.annotations.NotNull()
     java.util.Map<java.lang.String, ? extends java.math.BigDecimal> value) {
         return null;
     }
     
-    @androidx.room.TypeConverter
-    @org.jetbrains.annotations.NotNull
-    public final java.util.Map<java.lang.String, java.math.BigDecimal> toRegionalPricingMap(@org.jetbrains.annotations.NotNull
+    @androidx.room.TypeConverter()
+    @org.jetbrains.annotations.NotNull()
+    public final java.util.Map<java.lang.String, java.math.BigDecimal> toRegionalPricingMap(@org.jetbrains.annotations.NotNull()
     java.lang.String value) {
         return null;
     }

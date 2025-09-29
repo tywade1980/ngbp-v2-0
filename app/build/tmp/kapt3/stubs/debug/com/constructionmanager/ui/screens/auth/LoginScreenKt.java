@@ -4,9 +4,9 @@ package com.constructionmanager.ui.screens.auth;
 public final class LoginScreenKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void LoginScreen(@org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onLoginSuccess, @org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void LoginScreen(@org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onLoginSuccess, @org.jetbrains.annotations.NotNull()
     com.constructionmanager.ui.screens.auth.LoginViewModel viewModel) {
     }
 }

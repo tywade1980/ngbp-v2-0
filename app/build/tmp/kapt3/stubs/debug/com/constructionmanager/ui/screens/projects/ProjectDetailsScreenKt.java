@@ -4,30 +4,30 @@ package com.constructionmanager.ui.screens.projects;
 public final class ProjectDetailsScreenKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void ProjectDetailsScreen(@org.jetbrains.annotations.NotNull
-    java.lang.String projectId, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToDocumentation, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToWorkflows, @org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void ProjectDetailsScreen(@org.jetbrains.annotations.NotNull()
+    java.lang.String projectId, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToDocumentation, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToWorkflows, @org.jetbrains.annotations.NotNull()
     com.constructionmanager.ui.screens.projects.ProjectDetailsViewModel viewModel) {
     }
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void ProjectHeaderCard(com.constructionmanager.domain.model.Project project, kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToDocumentation, kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToWorkflows) {
     }
     
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void QuickActionsSection(kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToDocumentation, kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateToWorkflows, kotlin.jvm.functions.Function0<kotlin.Unit> onAddTimeEntry, kotlin.jvm.functions.Function0<kotlin.Unit> onAddExpense) {
     }
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void ActionButton(androidx.compose.ui.graphics.vector.ImageVector icon, java.lang.String text, kotlin.jvm.functions.Function0<kotlin.Unit> onClick) {
     }
     
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void RecentActivityCard(java.util.List<java.lang.String> activities) {
     }
 }

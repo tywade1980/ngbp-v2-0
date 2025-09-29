@@ -20,7 +20,7 @@ public enum ConstructionPhase {
     ConstructionPhase() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.domain.model.ConstructionPhase> getEntries() {
         return null;
     }

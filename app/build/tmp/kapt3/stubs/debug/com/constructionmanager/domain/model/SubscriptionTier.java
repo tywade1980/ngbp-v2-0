@@ -9,7 +9,7 @@ public enum SubscriptionTier {
     SubscriptionTier() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.domain.model.SubscriptionTier> getEntries() {
         return null;
     }

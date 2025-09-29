@@ -4,8 +4,8 @@ package com.constructionmanager.ui.screens.reports;
 public final class ReportsScreenKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void ReportsScreen(@org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void ReportsScreen(@org.jetbrains.annotations.NotNull()
     kotlin.jvm.functions.Function0<kotlin.Unit> onNavigateBack) {
     }
 }

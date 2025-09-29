@@ -10,7 +10,7 @@ public enum LaborEntryStatus {
     LaborEntryStatus() {
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public static kotlin.enums.EnumEntries<com.constructionmanager.domain.model.LaborEntryStatus> getEntries() {
         return null;
     }

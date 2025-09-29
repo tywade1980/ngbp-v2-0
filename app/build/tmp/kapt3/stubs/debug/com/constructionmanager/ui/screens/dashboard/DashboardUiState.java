@@ -8,16 +8,16 @@ public final class DashboardUiState {
     private final double totalBudget = 0.0;
     private final double currentCosts = 0.0;
     private final double onSchedulePercentage = 0.0;
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     private final java.util.List<com.constructionmanager.domain.model.Project> recentProjects = null;
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     private final java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> phaseDistribution = null;
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     private final java.lang.String error = null;
     
-    public DashboardUiState(boolean isLoading, int activeProjectsCount, int completedProjectsCount, double totalBudget, double currentCosts, double onSchedulePercentage, @org.jetbrains.annotations.NotNull
-    java.util.List<com.constructionmanager.domain.model.Project> recentProjects, @org.jetbrains.annotations.NotNull
-    java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> phaseDistribution, @org.jetbrains.annotations.Nullable
+    public DashboardUiState(boolean isLoading, int activeProjectsCount, int completedProjectsCount, double totalBudget, double currentCosts, double onSchedulePercentage, @org.jetbrains.annotations.NotNull()
+    java.util.List<com.constructionmanager.domain.model.Project> recentProjects, @org.jetbrains.annotations.NotNull()
+    java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> phaseDistribution, @org.jetbrains.annotations.Nullable()
     java.lang.String error) {
         super();
     }
@@ -46,17 +46,17 @@ public final class DashboardUiState {
         return 0.0;
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public final java.util.List<com.constructionmanager.domain.model.Project> getRecentProjects() {
         return null;
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public final java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> getPhaseDistribution() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String getError() {
         return null;
     }
@@ -89,42 +89,42 @@ public final class DashboardUiState {
         return 0.0;
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public final java.util.List<com.constructionmanager.domain.model.Project> component7() {
         return null;
     }
     
-    @org.jetbrains.annotations.NotNull
+    @org.jetbrains.annotations.NotNull()
     public final java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> component8() {
         return null;
     }
     
-    @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.Nullable()
     public final java.lang.String component9() {
         return null;
     }
     
-    @org.jetbrains.annotations.NotNull
-    public final com.constructionmanager.ui.screens.dashboard.DashboardUiState copy(boolean isLoading, int activeProjectsCount, int completedProjectsCount, double totalBudget, double currentCosts, double onSchedulePercentage, @org.jetbrains.annotations.NotNull
-    java.util.List<com.constructionmanager.domain.model.Project> recentProjects, @org.jetbrains.annotations.NotNull
-    java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> phaseDistribution, @org.jetbrains.annotations.Nullable
+    @org.jetbrains.annotations.NotNull()
+    public final com.constructionmanager.ui.screens.dashboard.DashboardUiState copy(boolean isLoading, int activeProjectsCount, int completedProjectsCount, double totalBudget, double currentCosts, double onSchedulePercentage, @org.jetbrains.annotations.NotNull()
+    java.util.List<com.constructionmanager.domain.model.Project> recentProjects, @org.jetbrains.annotations.NotNull()
+    java.util.Map<com.constructionmanager.domain.model.ConstructionPhase, java.lang.Integer> phaseDistribution, @org.jetbrains.annotations.Nullable()
     java.lang.String error) {
         return null;
     }
     
-    @java.lang.Override
-    public boolean equals(@org.jetbrains.annotations.Nullable
+    @java.lang.Override()
+    public boolean equals(@org.jetbrains.annotations.Nullable()
     java.lang.Object other) {
         return false;
     }
     
-    @java.lang.Override
+    @java.lang.Override()
     public int hashCode() {
         return 0;
     }
     
-    @java.lang.Override
-    @org.jetbrains.annotations.NotNull
+    @java.lang.Override()
+    @org.jetbrains.annotations.NotNull()
     public java.lang.String toString() {
         return null;
     }

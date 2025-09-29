@@ -4,14 +4,14 @@ package com.constructionmanager.ui.components;
 public final class RecentProjectCardKt {
     
     @kotlin.OptIn(markerClass = {androidx.compose.material3.ExperimentalMaterial3Api.class})
-    @androidx.compose.runtime.Composable
-    public static final void RecentProjectCard(@org.jetbrains.annotations.NotNull
-    com.constructionmanager.domain.model.Project project, @org.jetbrains.annotations.NotNull
-    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull
+    @androidx.compose.runtime.Composable()
+    public static final void RecentProjectCard(@org.jetbrains.annotations.NotNull()
+    com.constructionmanager.domain.model.Project project, @org.jetbrains.annotations.NotNull()
+    kotlin.jvm.functions.Function0<kotlin.Unit> onClick, @org.jetbrains.annotations.NotNull()
     androidx.compose.ui.Modifier modifier) {
     }
     
-    @androidx.compose.runtime.Composable
+    @androidx.compose.runtime.Composable()
     private static final void ProjectStatusChip(com.constructionmanager.domain.model.ProjectStatus status) {
     }
     
