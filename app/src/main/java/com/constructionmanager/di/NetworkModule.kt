@@ -2,7 +2,6 @@ package com.constructionmanager.di
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.constructionmanager.data.network.ApiService
 import com.constructionmanager.data.network.AuthApiService
 import dagger.Module
 import dagger.Provides
@@ -55,11 +54,5 @@ object NetworkModule {
     @Singleton
     fun provideAuthApiService(retrofit: Retrofit): AuthApiService {
         return retrofit.create(AuthApiService::class.java)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideApiService(retrofit: Retrofit): ApiService {
-        return retrofit.create(ApiService::class.java)
     }
 }

@@ -90,6 +90,7 @@ fun ProjectDetailsScreen(
             }
             
             uiState.project != null -> {
+                val project = uiState.project // Smart cast helper
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -100,7 +101,7 @@ fun ProjectDetailsScreen(
                     // Project Header
                     item {
                         ProjectHeaderCard(
-                            project = uiState.project,
+                            project = project,
                             onNavigateToDocumentation = onNavigateToDocumentation,
                             onNavigateToWorkflows = onNavigateToWorkflows
                         )
@@ -108,20 +109,20 @@ fun ProjectDetailsScreen(
                     
                     // Budget Overview
                     item {
-                        BudgetOverviewCard(project = uiState.project)
+                        BudgetOverviewCard(project = project)
                     }
                     
                     // Current Phase Progress
                     item {
                         PhaseProgressCard(
-                            currentPhase = uiState.project.currentPhase,
+                            currentPhase = project.currentPhase,
                             progress = uiState.phaseProgress
                         )
                     }
                     
                     // Timeline
                     item {
-                        TimelineCard(project = uiState.project)
+                        TimelineCard(project = project)
                     }
                     
                     // Quick Actions
