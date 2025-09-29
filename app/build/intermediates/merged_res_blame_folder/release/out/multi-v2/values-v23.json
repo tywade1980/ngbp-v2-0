@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.constructionmanager.app-mergeReleaseResources-61:/values-v23/values-v23.xml",
+            "map": [
+                {
+                    "source": "/home/runner/.gradle/caches/transforms-3/880c0e5669fe20e5d152a4c5dd22d3a7/transformed/work-runtime-2.9.0/res/values-v23/values-v23.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,121",
+                        "endColumns": "65,62",
+                        "endOffsets": "116,179"
+                    }
+                }
+            ]
+        }
+    ]
+}
