@@ -156,6 +156,7 @@ fun LoginScreen(
 
                 // Error message
                 if (uiState.error != null) {
+                    val error = uiState.error // Smart cast helper
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
@@ -163,7 +164,7 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = uiState.error,
+                            text = error!!,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(12.dp)

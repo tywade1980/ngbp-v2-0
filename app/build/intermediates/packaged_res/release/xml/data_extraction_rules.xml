@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Exclude sensitive data from cloud backup -->
+        <exclude domain="database" path="construction_manager_database" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- Allow device transfer but exclude sensitive data -->
+        <exclude domain="database" path="construction_manager_database" />
+    </device-transfer>
+</data-extraction-rules>
