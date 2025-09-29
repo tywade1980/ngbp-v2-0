@@ -20,6 +20,7 @@ import com.constructionmanager.ui.components.ProjectCard
 @Composable
 fun ProjectsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToProject: (String) -> Unit = {},
     viewModel: ProjectsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -172,7 +173,7 @@ fun ProjectsScreen(
                         items(uiState.filteredProjects) { project ->
                             ProjectCard(
                                 project = project,
-                                onClick = { /* Navigate to project details */ }
+                                onClick = { onNavigateToProject(project.id) }
                             )
                         }
                     }

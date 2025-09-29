@@ -119,12 +119,10 @@ class MaterialRepositoryImpl @Inject constructor(
             supplier = supplier,
             supplierSku = supplierSku,
             description = description,
-            specifications = kotlinx.serialization.json.Json.encodeToString(specifications),
+            specifications = if (specifications.isEmpty()) "" else specifications.entries.joinToString(",") { "${it.key}:${it.value}" },
             isActive = isActive,
             lastPriceUpdate = lastPriceUpdate.toString(),
-            regionalPricing = kotlinx.serialization.json.Json.encodeToString(
-                regionalPricing.mapValues { it.value.toString() }
-            )
+            regionalPricing = if (regionalPricing.isEmpty()) "" else regionalPricing.entries.joinToString(",") { "${it.key}:${it.value}" }
         )
     }
 }

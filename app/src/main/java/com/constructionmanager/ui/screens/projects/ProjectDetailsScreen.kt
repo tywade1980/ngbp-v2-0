@@ -115,7 +115,7 @@ fun ProjectDetailsScreen(
                     // Current Phase Progress
                     item {
                         PhaseProgressCard(
-                            currentPhase = project.currentPhase,
+                            currentPhase = project?.currentPhase ?: com.constructionmanager.domain.model.ConstructionPhase.PRE_CONSTRUCTION,
                             progress = uiState.phaseProgress
                         )
                     }

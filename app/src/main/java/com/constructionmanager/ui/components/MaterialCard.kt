@@ -106,7 +106,7 @@ fun MaterialCard(
                     fontWeight = FontWeight.Medium
                 )
                 
-                material.specifications.take(2).forEach { (key, value) ->
+                material.specifications.entries.take(2).forEach { (key, value) ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -146,7 +146,7 @@ private fun MaterialCategoryChip(category: MaterialCategory) {
         MaterialCategory.PLUMBING -> Icons.Default.Plumbing to MaterialTheme.colorScheme.secondary
         MaterialCategory.HVAC -> Icons.Default.Air to MaterialTheme.colorScheme.tertiary
         MaterialCategory.WINDOWS -> Icons.Default.Window to MaterialTheme.colorScheme.primary
-        MaterialCategory.DOORS -> Icons.Default.Door to MaterialTheme.colorScheme.secondary
+        MaterialCategory.DOORS -> Icons.Default.MeetingRoom to MaterialTheme.colorScheme.secondary
         MaterialCategory.FLOORING -> Icons.Default.Layers to MaterialTheme.colorScheme.tertiary
         MaterialCategory.FIXTURES -> Icons.Default.Lightbulb to MaterialTheme.colorScheme.primary
         MaterialCategory.HARDWARE -> Icons.Default.Construction to MaterialTheme.colorScheme.secondary
