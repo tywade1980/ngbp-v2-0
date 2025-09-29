@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.constructionmanager.app-merged_res-65:/xml_backup_rules.xml.flat",
+        "source": "com.constructionmanager.app-main-66:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "com.constructionmanager.app-merged_res-65:/xml_data_extraction_rules.xml.flat",
+        "source": "com.constructionmanager.app-main-66:/xml/data_extraction_rules.xml"
+    }
+]

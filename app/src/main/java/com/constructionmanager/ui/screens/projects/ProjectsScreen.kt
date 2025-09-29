@@ -173,7 +173,7 @@ fun ProjectsScreen(
                         items(uiState.filteredProjects) { project ->
                             ProjectCard(
                                 project = project,
-                                onClick = { /* Navigate to project details */ }
+                                onClick = { onNavigateToProject(project.id) }
                             )
                         }
                     }
