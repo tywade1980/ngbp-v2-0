@@ -234,7 +234,7 @@ private fun PhotoCategorySummaryCard(
             }
         ),
         border = if (isSelected) {
-            CardDefaults.outlinedCardBorder().copy(brush = null, width = 2.dp)
+            CardDefaults.outlinedCardBorder().copy(width = 2.dp)
         } else null
     ) {
         Column(

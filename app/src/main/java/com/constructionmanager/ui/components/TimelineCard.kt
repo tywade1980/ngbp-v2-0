@@ -138,15 +138,15 @@ private fun calculateProjectDuration(project: Project): String {
         val startDate = project.startDate
         val endDate = project.actualEndDate ?: project.estimatedEndDate
         
-        val daysBetween = endDate.toEpochDays() - startDate.toEpochDays()
+        val daysBetween: Long = (endDate.toEpochDays() - startDate.toEpochDays()).toLong()
         
         when {
-            daysBetween < 0 -> ""
+            daysBetween < 0L -> ""
             daysBetween == 0L -> "Same day project"
             daysBetween == 1L -> "1 day duration"
-            daysBetween < 7 -> "$daysBetween days duration"
-            daysBetween < 30 -> "${daysBetween / 7} weeks duration"
-            daysBetween < 365 -> "${daysBetween / 30} months duration"
+            daysBetween < 7L -> "$daysBetween days duration"
+            daysBetween < 30L -> "${daysBetween / 7} weeks duration"
+            daysBetween < 365L -> "${daysBetween / 30} months duration"
             else -> "${daysBetween / 365} years duration"
         }
     } catch (e: Exception) {
