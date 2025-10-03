@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <!-- Exclude sensitive data from backup -->
-    <exclude domain="database" path="construction_manager_database" />
-</full-backup-content>
