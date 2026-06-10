@@ -28,6 +28,8 @@ fun DashboardScreen(
     onNavigateToWorkflows: () -> Unit = {},
     onNavigateToReports: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToAssistant: () -> Unit = {},
+    onNavigateToVoice: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -41,7 +43,7 @@ fun DashboardScreen(
             TopAppBar(
                 title = { 
                     Text(
-                        "Construction Manager",
+                        "ConstructPro AI",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -99,6 +101,20 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
+                    item {
+                        QuickActionCard(
+                            title = "Ask Caroline",
+                            icon = Icons.Default.SmartToy,
+                            onClick = onNavigateToAssistant
+                        )
+                    }
+                    item {
+                        QuickActionCard(
+                            title = "Calls",
+                            icon = Icons.Default.Call,
+                            onClick = onNavigateToVoice
+                        )
+                    }
                     item {
                         QuickActionCard(
                             title = "New Project",
