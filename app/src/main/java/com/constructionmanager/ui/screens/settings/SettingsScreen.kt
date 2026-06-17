@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToUpdates: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     var isDarkTheme by remember { mutableStateOf(false) }
@@ -52,6 +53,12 @@ fun SettingsScreen(
                     SettingsItem.Switch("Offline Mode", "Store data locally", isOfflineMode) { isOfflineMode = it },
                     SettingsItem.Navigation("Data Export", "Export project data"),
                     SettingsItem.Navigation("Backup & Sync", "Cloud backup settings")
+                )
+            ),
+            SettingsSection(
+                title = "About",
+                items = listOf(
+                    SettingsItem.Action("App Updates", "Check for new versions over the air", onNavigateToUpdates)
                 )
             ),
             SettingsSection(

@@ -5,6 +5,7 @@ import com.constructionmanager.data.network.wade.AddMemoryRequest
 import com.constructionmanager.data.network.wade.ChatRequest
 import com.constructionmanager.data.network.wade.EstimateRequest
 import com.constructionmanager.data.network.wade.MemoryMessage
+import com.constructionmanager.data.network.wade.ScreenRequest
 import com.constructionmanager.data.network.wade.SearchMemoryRequest
 import com.constructionmanager.data.network.wade.WadeBackendConfig
 import com.constructionmanager.data.network.wade.WadeServiceFactory
@@ -115,6 +116,39 @@ class AssistantRepository @Inject constructor(
             if (!config.remoteEnabled) return@withContext Result.success(emptyList())
             runCatching { services.caroline().calls() }
         }
+
+    /**
+     * Asks the live Caroline receptionist how to handle an inbound call. Returns a result marked
+     * [CallScreeningResult.live] = false when the backend is disabled or unreachable, so the caller
+     * can fall back to its on-device heuristic.
+     */
+    suspend fun screenCall(callSid: String, number: String, name: String? = null): CallScreeningResult =
+        withContext(Dispatchers.IO) {
+            if (!config.remoteEnabled) {
+                return@withContext CallScreeningResult("local", "On-device heuristic", live = false)
+            }
+            try {
+                val decision = services.caroline()
+                    .screen(ScreenRequest(callSid = callSid, callerNumber = number, callerName = name))
+                CallScreeningResult(
+                    decision = decision.decision ?: "allow",
+                    reason = decision.reason ?: "",
+                    live = true
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Live call screening failed, falling back to heuristic", e)
+                CallScreeningResult("local", "Fallback after error: ${e.message}", live = false)
+            }
+        }
+
+    /** Best-effort connectivity probe for the orchestrator, used by the backend settings UI. */
+    suspend fun ping(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val health = services.orchestrator().health()
+            val status = health["status"]?.toString() ?: "ok"
+            "Orchestrator reachable ($status)"
+        }
+    }
 
     companion object {
         private const val TAG = "AssistantRepository"

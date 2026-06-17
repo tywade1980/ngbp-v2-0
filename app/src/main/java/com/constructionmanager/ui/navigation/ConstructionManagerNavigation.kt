@@ -20,6 +20,7 @@ import com.constructionmanager.ui.screens.projects.ProjectDetailsScreen
 import com.constructionmanager.ui.screens.projects.ProjectsScreen
 import com.constructionmanager.ui.screens.reports.ReportsScreen
 import com.constructionmanager.ui.screens.settings.SettingsScreen
+import com.constructionmanager.ui.screens.update.UpdateScreen
 import com.constructionmanager.ui.screens.workflows.WorkflowScreen
 
 @Composable
@@ -70,6 +71,18 @@ fun ConstructionManagerNavigation(
                 },
                 onNavigateToVoice = {
                     navController.navigate("voice")
+                },
+                onNavigateToUpdates = {
+                    navController.navigate("updates")
+                }
+            )
+        }
+
+        // App Updates (OTA)
+        composable("updates") {
+            UpdateScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -192,6 +205,9 @@ fun ConstructionManagerNavigation(
             SettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToUpdates = {
+                    navController.navigate("updates")
                 },
                 onLogout = {
                     navController.navigate("auth/login") {

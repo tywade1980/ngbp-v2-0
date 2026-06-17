@@ -30,6 +30,7 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToAssistant: () -> Unit = {},
     onNavigateToVoice: () -> Unit = {},
+    onNavigateToUpdates: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -148,6 +149,13 @@ fun DashboardScreen(
                             title = "Reports",
                             icon = Icons.Default.Assessment,
                             onClick = onNavigateToReports
+                        )
+                    }
+                    item {
+                        QuickActionCard(
+                            title = "Updates",
+                            icon = Icons.Default.SystemUpdate,
+                            onClick = onNavigateToUpdates
                         )
                     }
                     item {
