@@ -2,12 +2,17 @@ package com.constructionmanager.ui.screens.materials
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.data.cloud.CloudMirror
 import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.domain.repository.MaterialRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import java.math.BigDecimal
 import javax.inject.Inject
 
 data class MaterialsUiState(
@@ -21,7 +26,8 @@ data class MaterialsUiState(
 
 @HiltViewModel
 class MaterialsViewModel @Inject constructor(
-    private val materialRepository: MaterialRepository
+    private val materialRepository: MaterialRepository,
+    private val cloudMirror: CloudMirror
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(MaterialsUiState())
@@ -74,10 +80,54 @@ class MaterialsViewModel @Inject constructor(
         }
     }
     
+    /** Adds a material to the local catalog and mirrors it to Firestore. */
+    fun addMaterial(
+        name: String,
+        category: MaterialCategory,
+        unit: String,
+        price: String,
+        supplier: String,
+        description: String
+    ) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                val priceValue = price.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                val material = Material(
+                    id = "mat_${System.currentTimeMillis()}",
+                    name = name.trim(),
+                    category = category,
+                    subcategory = "",
+                    unitOfMeasurement = unit.ifBlank { "each" },
+                    currentPrice = priceValue,
+                    supplier = supplier.trim(),
+                    supplierSku = null,
+                    description = description.trim(),
+                    lastPriceUpdate = now
+                )
+                materialRepository.insertMaterial(material)
+                cloudMirror.push(
+                    collection = "materials",
+                    id = material.id,
+                    data = mapOf(
+                        "name" to material.name,
+                        "category" to category.name,
+                        "unit" to material.unitOfMeasurement,
+                        "price" to priceValue.toDouble(),
+                        "supplier" to material.supplier
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Failed to add material")
+            }
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
-    
+
     fun selectCategory(category: MaterialCategory?) {
         _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
