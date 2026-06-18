@@ -2,6 +2,8 @@ package com.constructionmanager.ui.screens.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.data.cloud.CloudProjectRepository
+import com.constructionmanager.data.cloud.CloudStatus
 import com.constructionmanager.domain.model.ConstructionPhase
 import com.constructionmanager.domain.model.Project
 import com.constructionmanager.domain.model.ProjectStatus
@@ -24,13 +26,18 @@ data class DashboardUiState(
     val onSchedulePercentage: Double = 0.0,
     val recentProjects: List<Project> = emptyList(),
     val phaseDistribution: Map<ConstructionPhase, Int> = emptyMap(),
+    val cloudConnected: Boolean = false,
+    val cloudProjectId: String = "",
+    val cloudProjectCount: Int? = null,
     val error: String? = null
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val materialRepository: MaterialRepository
+    private val materialRepository: MaterialRepository,
+    private val cloudStatus: CloudStatus,
+    private val cloudProjectRepository: CloudProjectRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -83,6 +90,9 @@ class DashboardViewModel @Inject constructor(
                     }.toDouble() / activeProjects.size
                 } else 0.0
                 
+                // Cloud (Firebase) status + a live Firestore read, best-effort.
+                val cloudCount = cloudProjectRepository.count().getOrNull()
+
                 _uiState.value = DashboardUiState(
                     isLoading = false,
                     activeProjectsCount = activeCount,
@@ -91,9 +101,12 @@ class DashboardViewModel @Inject constructor(
                     currentCosts = currentCosts,
                     onSchedulePercentage = onSchedulePercentage,
                     recentProjects = recentProjects,
-                    phaseDistribution = phaseDistribution
+                    phaseDistribution = phaseDistribution,
+                    cloudConnected = cloudStatus.connected,
+                    cloudProjectId = cloudStatus.projectId,
+                    cloudProjectCount = cloudCount
                 )
-                
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
