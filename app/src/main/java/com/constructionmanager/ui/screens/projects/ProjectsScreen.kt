@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,9 +12,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.constructionmanager.domain.model.ProjectStatus
+import com.constructionmanager.domain.model.ProjectType
 import com.constructionmanager.ui.components.ProjectCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,11 +28,12 @@ fun ProjectsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    
+    var showNewProjectDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         viewModel.loadProjects()
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -40,7 +44,7 @@ fun ProjectsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Add new project */ }) {
+                    IconButton(onClick = { showNewProjectDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Project")
                     }
                 }
@@ -48,7 +52,7 @@ fun ProjectsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* Navigate to new project */ },
+                onClick = { showNewProjectDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "New Project")
@@ -181,4 +185,93 @@ fun ProjectsScreen(
             }
         }
     }
+
+    if (showNewProjectDialog) {
+        NewProjectDialog(
+            onDismiss = { showNewProjectDialog = false },
+            onCreate = { name, client, type, budget, city ->
+                viewModel.createProject(name, client, type, budget, city)
+                showNewProjectDialog = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewProjectDialog(
+    onDismiss: () -> Unit,
+    onCreate: (name: String, client: String, type: ProjectType, budget: String, city: String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var client by remember { mutableStateOf("") }
+    var city by remember { mutableStateOf("") }
+    var budget by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf(ProjectType.RESIDENTIAL) }
+    var typeMenuOpen by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Project") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Project name *") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = client, onValueChange = { client = it },
+                    label = { Text("Client name") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                ExposedDropdownMenuBox(
+                    expanded = typeMenuOpen,
+                    onExpandedChange = { typeMenuOpen = it }
+                ) {
+                    OutlinedTextField(
+                        value = type.name.replace("_", " "),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeMenuOpen) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeMenuOpen,
+                        onDismissRequest = { typeMenuOpen = false }
+                    ) {
+                        ProjectType.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.name.replace("_", " ")) },
+                                onClick = { type = option; typeMenuOpen = false }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = budget, onValueChange = { budget = it },
+                    label = { Text("Total budget ($)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = city, onValueChange = { city = it },
+                    label = { Text("City") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onCreate(name, client, type, budget, city) },
+                enabled = name.isNotBlank()
+            ) { Text("Create") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

@@ -2,12 +2,23 @@ package com.constructionmanager.ui.screens.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.data.cloud.CloudProject
+import com.constructionmanager.data.cloud.CloudProjectRepository
+import com.constructionmanager.domain.model.ConstructionPhase
 import com.constructionmanager.domain.model.Project
 import com.constructionmanager.domain.model.ProjectStatus
+import com.constructionmanager.domain.model.ProjectType
 import com.constructionmanager.domain.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
+import java.math.BigDecimal
 import javax.inject.Inject
 
 data class ProjectsUiState(
@@ -20,7 +31,8 @@ data class ProjectsUiState(
 
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
-    private val projectRepository: ProjectRepository
+    private val projectRepository: ProjectRepository,
+    private val cloudProjectRepository: CloudProjectRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ProjectsUiState())
@@ -67,6 +79,56 @@ class ProjectsViewModel @Inject constructor(
         }
     }
     
+    /** Creates a project: writes to the local DB (instant display) and mirrors it to Firestore. */
+    fun createProject(
+        name: String,
+        clientName: String,
+        projectType: ProjectType,
+        totalBudget: String,
+        city: String
+    ) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                val budget = totalBudget.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                val project = Project(
+                    id = "proj_${System.currentTimeMillis()}",
+                    name = name.trim(),
+                    address = "",
+                    city = city.trim(),
+                    state = "",
+                    zipCode = "",
+                    clientName = clientName.trim(),
+                    clientEmail = "",
+                    clientPhone = "",
+                    projectType = projectType,
+                    currentPhase = ConstructionPhase.PRE_CONSTRUCTION,
+                    startDate = today,
+                    estimatedEndDate = today.plus(90, DateTimeUnit.DAY),
+                    totalBudget = budget,
+                    currentCost = BigDecimal.ZERO,
+                    status = ProjectStatus.PLANNING,
+                    notes = "",
+                    createdAt = now,
+                    updatedAt = now
+                )
+                projectRepository.insertProject(project)
+                cloudProjectRepository.pushProject(
+                    CloudProject(
+                        id = project.id,
+                        name = project.name,
+                        status = project.status.name,
+                        budget = budget.toDouble()
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Failed to create project")
+            }
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }

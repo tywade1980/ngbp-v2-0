@@ -26,9 +26,11 @@ data class CloudProject(
  */
 @Singleton
 class CloudProjectRepository @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val cloudStatus: CloudStatus
 ) {
-    private fun collection() = firestore.collection(COLLECTION)
+    private fun collection() =
+        firestore.collection("users").document(cloudStatus.workspaceId).collection(COLLECTION)
 
     suspend fun pushProject(project: CloudProject): Result<String> = runCatching {
         val doc = if (project.id.isBlank()) collection().document() else collection().document(project.id)

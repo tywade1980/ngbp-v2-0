@@ -14,4 +14,11 @@ class CloudStatus @Inject constructor(
     val projectId: String get() = app.options.projectId ?: "unknown"
     val connected: Boolean get() = !app.options.projectId.isNullOrBlank()
     val userId: String? get() = auth.currentUser?.uid
+
+    /** Firestore partition for the current user; falls back to the demo workspace when signed out. */
+    val workspaceId: String get() = auth.currentUser?.uid ?: DEMO_WORKSPACE
+
+    companion object {
+        const val DEMO_WORKSPACE = "demo_user_001"
+    }
 }
