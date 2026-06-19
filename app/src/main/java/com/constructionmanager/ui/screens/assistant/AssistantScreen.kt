@@ -180,7 +180,7 @@ private fun MessageBubble(msg: ChatMessage) {
         }
         if (!msg.fromUser) {
             Text(
-                text = if (msg.live) "live • orchestrator + memory" else "on-device",
+                text = msg.provenance ?: if (msg.live) "live • orchestrator + memory" else "on-device",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, start = 4.dp)

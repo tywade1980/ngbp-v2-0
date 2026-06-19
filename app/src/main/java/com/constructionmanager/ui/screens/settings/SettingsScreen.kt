@@ -12,45 +12,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToUpdates: () -> Unit = {},
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    var isDarkTheme by remember { mutableStateOf(false) }
-    var isNotificationsEnabled by remember { mutableStateOf(true) }
-    var defaultRegion by remember { mutableStateOf("Midwest") }
-    var isOfflineMode by remember { mutableStateOf(false) }
-    
-    val settingsSections = remember {
+    val isDarkTheme by viewModel.darkTheme.collectAsState()
+    val isNotificationsEnabled by viewModel.notifications.collectAsState()
+    val defaultRegion by viewModel.defaultRegion.collectAsState()
+    val isOfflineMode by viewModel.offlineMode.collectAsState()
+    var showRegionDialog by remember { mutableStateOf(false) }
+    val regionOptions = listOf("Northeast", "Southeast", "Midwest", "Southwest", "West")
+
+    val settingsSections =
         listOf(
             SettingsSection(
                 title = "Appearance",
                 items = listOf(
-                    SettingsItem.Switch("Dark Theme", "Use dark color scheme", isDarkTheme) { isDarkTheme = it }
+                    SettingsItem.Switch("Dark Theme", "Use dark color scheme", isDarkTheme) { viewModel.setDarkTheme(it) }
                 )
             ),
             SettingsSection(
-                title = "Notifications", 
+                title = "Notifications",
                 items = listOf(
-                    SettingsItem.Switch("Push Notifications", "Receive project updates", isNotificationsEnabled) { isNotificationsEnabled = it },
+                    SettingsItem.Switch("Push Notifications", "Receive project updates", isNotificationsEnabled) { viewModel.setNotifications(it) },
                     SettingsItem.Navigation("Notification Settings", "Customize notification preferences")
                 )
             ),
             SettingsSection(
                 title = "Regional Settings",
                 items = listOf(
-                    SettingsItem.Selection("Default Region", "Set pricing region", defaultRegion, listOf("Northeast", "Southeast", "Midwest", "Southwest", "West")) { defaultRegion = it },
+                    SettingsItem.Selection("Default Region", "Set pricing region", defaultRegion, regionOptions, onClick = { showRegionDialog = true }) { viewModel.setDefaultRegion(it) },
                     SettingsItem.Navigation("Currency Format", "USD ($)")
                 )
             ),
             SettingsSection(
                 title = "Data & Storage",
                 items = listOf(
-                    SettingsItem.Switch("Offline Mode", "Store data locally", isOfflineMode) { isOfflineMode = it },
+                    SettingsItem.Switch("Offline Mode", "Store data locally", isOfflineMode) { viewModel.setOfflineMode(it) },
                     SettingsItem.Navigation("Data Export", "Export project data"),
                     SettingsItem.Navigation("Backup & Sync", "Cloud backup settings")
                 )
@@ -69,6 +73,35 @@ fun SettingsScreen(
                     SettingsItem.Action("Sign Out", "Log out of your account", onLogout)
                 )
             )
+        )
+
+    if (showRegionDialog) {
+        AlertDialog(
+            onDismissRequest = { showRegionDialog = false },
+            title = { Text("Default Region") },
+            text = {
+                Column {
+                    regionOptions.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setDefaultRegion(option)
+                                    showRegionDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = option == defaultRegion, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(option, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRegionDialog = false }) { Text("Close") }
+            }
         )
     }
 
@@ -235,7 +268,7 @@ private fun SettingsItemRow(item: SettingsItem) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { /* Show selection dialog */ }
+                    .clickable { item.onClick() }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -314,6 +347,7 @@ private sealed class SettingsItem {
         val subtitle: String,
         val selectedValue: String,
         val options: List<String>,
+        val onClick: () -> Unit = {},
         val onSelectionChange: (String) -> Unit
     ) : SettingsItem()
     

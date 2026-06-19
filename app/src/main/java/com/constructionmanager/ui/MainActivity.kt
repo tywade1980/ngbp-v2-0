@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
+import com.constructionmanager.data.settings.SettingsStore
 import com.constructionmanager.ui.navigation.ConstructionManagerNavigation
 import com.constructionmanager.ui.screens.auth.LoginViewModel
 import com.constructionmanager.ui.theme.ConstructionManagerTheme
@@ -35,6 +36,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var playUpdateManager: PlayUpdateManager
+
+    @Inject
+    lateinit var settingsStore: SettingsStore
 
     // Drives the "update downloaded — restart to install" prompt for the Play flexible flow.
     private val updateDownloaded = mutableStateOf(false)
@@ -59,7 +63,8 @@ class MainActivity : ComponentActivity() {
         maybeStartPlayUpdate()
 
         setContent {
-            ConstructionManagerTheme {
+            val darkTheme by settingsStore.darkTheme.collectAsState()
+            ConstructionManagerTheme(darkTheme = darkTheme) {
                 MainContent(
                     updateDownloaded = updateDownloaded.value,
                     onCompleteUpdate = { playUpdateManager.manager.completeUpdate() }

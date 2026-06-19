@@ -20,7 +20,7 @@ data class AssistantReply(
     val source: Source,
     val memoryContext: List<String> = emptyList()
 ) {
-    enum class Source { LIVE, OFFLINE }
+    enum class Source { LIVE, OFFLINE, AGENT }
 }
 
 data class CallScreeningResult(
@@ -41,9 +41,16 @@ data class CallScreeningResult(
 @Singleton
 class AssistantRepository @Inject constructor(
     private val services: WadeServiceFactory,
-    private val config: WadeBackendConfig
+    private val config: WadeBackendConfig,
+    private val agent: ConstructionAgent
 ) {
     suspend fun chat(message: String, sessionId: String): AssistantReply = withContext(Dispatchers.IO) {
+        // 0) Agent control: if this is an actionable command, execute it on-device (works offline)
+        //    and report back. Conversational turns return null and fall through to the LLM.
+        runCatching { agent.tryHandle(message) }.getOrNull()?.let { outcome ->
+            return@withContext AssistantReply(outcome.text, AssistantReply.Source.AGENT)
+        }
+
         if (!config.remoteEnabled) {
             return@withContext AssistantReply(OfflineAssistant.reply(message), AssistantReply.Source.OFFLINE)
         }

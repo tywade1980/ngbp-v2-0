@@ -18,14 +18,16 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val fromUser: Boolean,
-    val live: Boolean = false
+    val live: Boolean = false,
+    val provenance: String? = null
 )
 
 data class AssistantUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
-            text = "Hi Tyler — Caroline here. Ask me for an estimate, a briefing, a material lookup, " +
-                "or anything across your projects.",
+            text = "Hi Tyler — Caroline here. I can answer questions and take action. Try " +
+                "\"create a project called Maple Kitchen for the Reyes family, budget \$48k\", " +
+                "\"add a worker named Sam, electrician at \$45/hr\", or \"how many projects do I have?\"",
             fromUser = false
         )
     ),
@@ -101,7 +103,12 @@ class AssistantViewModel @Inject constructor(
                 messages = it.messages + ChatMessage(
                     text = reply.text,
                     fromUser = false,
-                    live = reply.source == AssistantReply.Source.LIVE
+                    live = reply.source == AssistantReply.Source.LIVE,
+                    provenance = when (reply.source) {
+                        AssistantReply.Source.LIVE -> "live • orchestrator + memory"
+                        AssistantReply.Source.AGENT -> "agent • action taken"
+                        AssistantReply.Source.OFFLINE -> "on-device"
+                    }
                 ),
                 isSending = false
             )
