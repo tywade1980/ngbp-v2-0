@@ -1,23 +1,33 @@
 package com.constructionmanager.ui.screens.reports
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    viewModel: ReportsViewModel = hiltViewModel()
 ) {
+    val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    var reportToView by remember { mutableStateOf<String?>(null) }
     val reportTypes = remember {
         listOf(
             ReportType("Cost Analysis", "Detailed project cost breakdown", Icons.Default.Analytics),
@@ -39,7 +49,7 @@ fun ReportsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Export all reports */ }) {
+                    IconButton(onClick = { shareReport(context, viewModel.exportAll()) }) {
                         Icon(Icons.Default.FileDownload, contentDescription = "Export")
                     }
                 }
@@ -47,7 +57,7 @@ fun ReportsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* Generate new report */ },
+                onClick = { reportToView = viewModel.buildReport("Full Summary") },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Default.Assessment, contentDescription = "Generate Report")
@@ -69,12 +79,12 @@ fun ReportsScreen(
                 ) {
                     SummaryCard(
                         title = "Total Projects",
-                        value = "12",
+                        value = state.totalProjects.toString(),
                         modifier = Modifier.weight(1f)
                     )
                     SummaryCard(
                         title = "Active Projects",
-                        value = "8",
+                        value = state.activeProjects.toString(),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -87,12 +97,12 @@ fun ReportsScreen(
                 ) {
                     SummaryCard(
                         title = "Total Budget",
-                        value = "$2.4M",
+                        value = state.totalBudget,
                         modifier = Modifier.weight(1f)
                     )
                     SummaryCard(
                         title = "On Schedule",
-                        value = "75%",
+                        value = state.onSchedule,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -110,12 +120,43 @@ fun ReportsScreen(
             items(reportTypes) { reportType ->
                 ReportCard(
                     reportType = reportType,
-                    onGenerateClick = { /* Generate specific report */ },
-                    onViewClick = { /* View existing report */ }
+                    onGenerateClick = { shareReport(context, viewModel.buildReport(reportType.title)) },
+                    onViewClick = { reportToView = viewModel.buildReport(reportType.title) }
                 )
             }
         }
     }
+
+    reportToView?.let { text ->
+        AlertDialog(
+            onDismissRequest = { reportToView = null },
+            title = { Text("Report Preview") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(text, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { shareReport(context, text); reportToView = null }) { Text("Share / Export") }
+            },
+            dismissButton = {
+                TextButton(onClick = { reportToView = null }) { Text("Close") }
+            }
+        )
+    }
+}
+
+private fun shareReport(context: Context, text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "ConstructPro report")
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, "Share report"))
 }
 
 @Composable
