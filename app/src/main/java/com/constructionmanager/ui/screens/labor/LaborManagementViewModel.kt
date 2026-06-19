@@ -2,12 +2,19 @@ package com.constructionmanager.ui.screens.labor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.data.cloud.CloudMirror
 import com.constructionmanager.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import java.math.BigDecimal
 import javax.inject.Inject
 
 data class LaborManagementUiState(
@@ -30,11 +37,14 @@ data class LaborManagementUiState(
 
 @HiltViewModel
 class LaborManagementViewModel @Inject constructor(
-    // Repository dependencies would be injected here
+    private val cloudMirror: CloudMirror
 ) : ViewModel() {
-    
+
     private val _uiState = MutableStateFlow(LaborManagementUiState())
     val uiState: StateFlow<LaborManagementUiState> = _uiState.asStateFlow()
+
+    private var timerJob: Job? = null
+    private var elapsedSeconds = 0
     
     fun loadLaborData() {
         viewModelScope.launch {
@@ -83,13 +93,78 @@ class LaborManagementViewModel @Inject constructor(
     }
     
     fun startTimeTracking() {
-        _uiState.value = _uiState.value.copy(isTimeTracking = true)
-        // Start timer logic would go here
+        if (_uiState.value.isTimeTracking) return
+        elapsedSeconds = 0
+        _uiState.value = _uiState.value.copy(isTimeTracking = true, currentTrackingDuration = "00:00:00")
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                elapsedSeconds++
+                _uiState.value = _uiState.value.copy(currentTrackingDuration = formatDuration(elapsedSeconds))
+            }
+        }
     }
-    
+
     fun stopTimeTracking() {
+        timerJob?.cancel()
+        timerJob = null
         _uiState.value = _uiState.value.copy(isTimeTracking = false)
-        // Stop timer and save entry logic would go here
+    }
+
+    /** Adds a worker to the roster (in-memory list) and mirrors it to Firestore. */
+    fun addWorker(
+        firstName: String,
+        lastName: String,
+        trade: TradeType,
+        skillLevel: SkillLevel,
+        hourlyRate: String,
+        phone: String,
+        email: String
+    ) {
+        if (firstName.isBlank() && lastName.isBlank()) return
+        viewModelScope.launch {
+            val rate = hourlyRate.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val worker = Worker(
+                id = "worker_${System.currentTimeMillis()}",
+                firstName = firstName.trim(),
+                lastName = lastName.trim(),
+                email = email.trim(),
+                phone = phone.trim(),
+                tradeTypes = listOf(trade),
+                skillLevel = skillLevel,
+                certifications = emptyList(),
+                hourlyRate = rate,
+                hireDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            )
+            val updatedWorkers = listOf(worker) + _uiState.value.workers
+            val selected = _uiState.value.selectedTradeType
+            _uiState.value = _uiState.value.copy(
+                workers = updatedWorkers,
+                filteredWorkers = if (selected == null) updatedWorkers
+                else updatedWorkers.filter { it.tradeTypes.contains(selected) },
+                activeWorkersCount = updatedWorkers.size
+            )
+            cloudMirror.push(
+                collection = "workers",
+                id = worker.id,
+                data = mapOf(
+                    "firstName" to worker.firstName,
+                    "lastName" to worker.lastName,
+                    "trade" to trade.name,
+                    "skillLevel" to skillLevel.name,
+                    "hourlyRate" to rate.toDouble(),
+                    "phone" to worker.phone,
+                    "email" to worker.email
+                )
+            )
+        }
+    }
+
+    private fun formatDuration(totalSeconds: Int): String {
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val s = totalSeconds % 60
+        return "%02d:%02d:%02d".format(h, m, s)
     }
     
     private fun createMockWorkers(): List<Worker> {

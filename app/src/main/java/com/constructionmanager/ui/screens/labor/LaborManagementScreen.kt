@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,8 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.constructionmanager.domain.model.SkillLevel
 import com.constructionmanager.domain.model.TradeType
 import com.constructionmanager.ui.components.LaborEntryCard
 import com.constructionmanager.ui.components.WorkerCard
@@ -27,6 +30,7 @@ fun LaborManagementScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
+    var showAddWorker by remember { mutableStateOf(false) }
     val tabs = listOf("Time Tracking", "Workers", "Labor Costs")
 
     LaunchedEffect(Unit) {
@@ -43,7 +47,7 @@ fun LaborManagementScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Add worker */ }) {
+                    IconButton(onClick = { showAddWorker = true }) {
                         Icon(Icons.Default.PersonAdd, contentDescription = "Add Worker")
                     }
                 }
@@ -51,18 +55,17 @@ fun LaborManagementScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { 
+                onClick = {
                     when (selectedTab) {
-                        0 -> { /* Add time entry */ }
-                        1 -> { /* Add worker */ }
-                        2 -> { /* Add labor cost */ }
+                        0 -> if (uiState.isTimeTracking) viewModel.stopTimeTracking() else viewModel.startTimeTracking()
+                        else -> showAddWorker = true
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
                     imageVector = when (selectedTab) {
-                        0 -> Icons.Default.AccessTime
+                        0 -> if (uiState.isTimeTracking) Icons.Default.Stop else Icons.Default.AccessTime
                         1 -> Icons.Default.PersonAdd
                         else -> Icons.Default.Add
                     },
@@ -97,6 +100,130 @@ fun LaborManagementScreen(
             }
         }
     }
+
+    if (showAddWorker) {
+        AddWorkerDialog(
+            onDismiss = { showAddWorker = false },
+            onAdd = { first, last, trade, skill, rate, phone, email ->
+                viewModel.addWorker(first, last, trade, skill, rate, phone, email)
+                showAddWorker = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddWorkerDialog(
+    onDismiss: () -> Unit,
+    onAdd: (first: String, last: String, trade: TradeType, skill: SkillLevel, rate: String, phone: String, email: String) -> Unit
+) {
+    var first by remember { mutableStateOf("") }
+    var last by remember { mutableStateOf("") }
+    var rate by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var trade by remember { mutableStateOf(TradeType.CARPENTER) }
+    var skill by remember { mutableStateOf(SkillLevel.JOURNEYMAN) }
+    var tradeMenuOpen by remember { mutableStateOf(false) }
+    var skillMenuOpen by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Worker") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = first, onValueChange = { first = it },
+                        label = { Text("First name *") }, singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = last, onValueChange = { last = it },
+                        label = { Text("Last name") }, singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                ExposedDropdownMenuBox(
+                    expanded = tradeMenuOpen,
+                    onExpandedChange = { tradeMenuOpen = it }
+                ) {
+                    OutlinedTextField(
+                        value = trade.name.replace("_", " "),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Trade") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = tradeMenuOpen) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = tradeMenuOpen,
+                        onDismissRequest = { tradeMenuOpen = false }
+                    ) {
+                        TradeType.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.name.replace("_", " ")) },
+                                onClick = { trade = option; tradeMenuOpen = false }
+                            )
+                        }
+                    }
+                }
+                ExposedDropdownMenuBox(
+                    expanded = skillMenuOpen,
+                    onExpandedChange = { skillMenuOpen = it }
+                ) {
+                    OutlinedTextField(
+                        value = skill.name,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Skill level") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = skillMenuOpen) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = skillMenuOpen,
+                        onDismissRequest = { skillMenuOpen = false }
+                    ) {
+                        SkillLevel.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.name) },
+                                onClick = { skill = option; skillMenuOpen = false }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = rate, onValueChange = { rate = it },
+                    label = { Text("Hourly rate ($)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = phone, onValueChange = { phone = it },
+                    label = { Text("Phone") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = email, onValueChange = { email = it },
+                    label = { Text("Email") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onAdd(first, last, trade, skill, rate, phone, email) },
+                enabled = first.isNotBlank() || last.isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
