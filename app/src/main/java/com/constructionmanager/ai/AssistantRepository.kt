@@ -48,6 +48,20 @@ class AssistantRepository @Inject constructor(
         // 0) Agent control: if this is an actionable command, execute it on-device (works offline)
         //    and report back. Conversational turns return null and fall through to the LLM.
         runCatching { agent.tryHandle(message) }.getOrNull()?.let { outcome ->
+            // Record the action in long-term memory too (best-effort), so recall spans actions + chat.
+            if (config.remoteEnabled) {
+                runCatching {
+                    services.memory().add(
+                        AddMemoryRequest(
+                            messages = listOf(
+                                MemoryMessage("user", message),
+                                MemoryMessage("assistant", outcome.text)
+                            ),
+                            userId = config.userId
+                        )
+                    )
+                }
+            }
             return@withContext AssistantReply(outcome.text, AssistantReply.Source.AGENT)
         }
 

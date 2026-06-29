@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructionmanager.ai.AssistantReply
 import com.constructionmanager.ai.AssistantRepository
+import com.constructionmanager.data.assistant.ChatHistoryStore
 import com.constructionmanager.data.network.wade.WadeBackendConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,20 +45,45 @@ data class AssistantUiState(
 @HiltViewModel
 class AssistantViewModel @Inject constructor(
     private val repository: AssistantRepository,
-    private val config: WadeBackendConfig
+    private val config: WadeBackendConfig,
+    private val chatHistoryStore: ChatHistoryStore
 ) : ViewModel() {
 
     private val sessionId = UUID.randomUUID().toString()
     private val _uiState = MutableStateFlow(loadState())
     val uiState: StateFlow<AssistantUiState> = _uiState.asStateFlow()
 
-    private fun loadState() = AssistantUiState(
-        remoteEnabled = config.remoteEnabled,
-        orchestratorUrl = config.orchestratorUrl,
-        memoryUrl = config.memoryUrl,
-        carolineUrl = config.carolineUrl,
-        userId = config.userId
-    )
+    private fun loadState(): AssistantUiState {
+        val persisted = chatHistoryStore.load()
+        val messages = if (persisted.isEmpty()) {
+            AssistantUiState().messages
+        } else {
+            persisted.map {
+                ChatMessage(
+                    text = it.text,
+                    fromUser = it.fromUser,
+                    live = it.provenance?.startsWith("live") == true,
+                    provenance = it.provenance
+                )
+            }
+        }
+        return AssistantUiState(
+            messages = messages,
+            remoteEnabled = config.remoteEnabled,
+            orchestratorUrl = config.orchestratorUrl,
+            memoryUrl = config.memoryUrl,
+            carolineUrl = config.carolineUrl,
+            userId = config.userId
+        )
+    }
+
+    private fun persistHistory() {
+        chatHistoryStore.save(
+            _uiState.value.messages.map {
+                ChatHistoryStore.StoredMessage(it.text, it.fromUser, it.provenance)
+            }
+        )
+    }
 
     fun onInputChange(value: String) = _uiState.update { it.copy(input = value) }
 
@@ -113,6 +139,7 @@ class AssistantViewModel @Inject constructor(
                 isSending = false
             )
         }
+        persistHistory()
     }
 
     fun saveBackend(
