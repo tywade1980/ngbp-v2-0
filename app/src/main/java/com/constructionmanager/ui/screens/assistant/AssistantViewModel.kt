@@ -40,7 +40,8 @@ data class AssistantUiState(
     val orchestratorUrl: String = "",
     val memoryUrl: String = "",
     val carolineUrl: String = "",
-    val userId: String = ""
+    val userId: String = "",
+    val webSearchApiKey: String = ""
 )
 
 @HiltViewModel
@@ -74,7 +75,8 @@ class AssistantViewModel @Inject constructor(
             orchestratorUrl = config.orchestratorUrl,
             memoryUrl = config.memoryUrl,
             carolineUrl = config.carolineUrl,
-            userId = config.userId
+            userId = config.userId,
+            webSearchApiKey = config.webSearchApiKey
         )
     }
 
@@ -135,6 +137,7 @@ class AssistantViewModel @Inject constructor(
                         AssistantReply.Source.LIVE -> "live • orchestrator + memory"
                         AssistantReply.Source.AGENT -> "agent • action taken"
                         AssistantReply.Source.OFFLINE -> "on-device"
+                        AssistantReply.Source.WEB -> "web • tavily"
                     }
                 ),
                 isSending = false
@@ -148,20 +151,23 @@ class AssistantViewModel @Inject constructor(
         orchestratorUrl: String,
         memoryUrl: String,
         carolineUrl: String,
-        userId: String
+        userId: String,
+        webSearchApiKey: String
     ) {
         config.remoteEnabled = remoteEnabled
         config.orchestratorUrl = orchestratorUrl
         config.memoryUrl = memoryUrl
         config.carolineUrl = carolineUrl
         if (userId.isNotBlank()) config.userId = userId
+        config.webSearchApiKey = webSearchApiKey
         _uiState.update {
             it.copy(
                 remoteEnabled = config.remoteEnabled,
                 orchestratorUrl = config.orchestratorUrl,
                 memoryUrl = config.memoryUrl,
                 carolineUrl = config.carolineUrl,
-                userId = config.userId
+                userId = config.userId,
+                webSearchApiKey = config.webSearchApiKey
             )
         }
     }

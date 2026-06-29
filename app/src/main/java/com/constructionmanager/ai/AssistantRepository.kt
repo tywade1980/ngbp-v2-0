@@ -20,7 +20,7 @@ data class AssistantReply(
     val source: Source,
     val memoryContext: List<String> = emptyList()
 ) {
-    enum class Source { LIVE, OFFLINE, AGENT }
+    enum class Source { LIVE, OFFLINE, AGENT, WEB }
 }
 
 data class CallScreeningResult(
@@ -42,7 +42,8 @@ data class CallScreeningResult(
 class AssistantRepository @Inject constructor(
     private val services: WadeServiceFactory,
     private val config: WadeBackendConfig,
-    private val agent: ConstructionAgent
+    private val agent: ConstructionAgent,
+    private val webSearch: WebSearchRepository
 ) {
     suspend fun chat(message: String, sessionId: String): AssistantReply = withContext(Dispatchers.IO) {
         // 0) Agent control: if this is an actionable command, execute it on-device (works offline)
@@ -63,6 +64,13 @@ class AssistantRepository @Inject constructor(
                 }
             }
             return@withContext AssistantReply(outcome.text, AssistantReply.Source.AGENT)
+        }
+
+        // 1) Explicit web lookups, when a search key is configured.
+        if (webSearch.isConfigured() && webSearch.isSearchQuery(message)) {
+            webSearch.search(message).getOrNull()?.let {
+                return@withContext AssistantReply(it, AssistantReply.Source.WEB)
+            }
         }
 
         if (!config.remoteEnabled) {
