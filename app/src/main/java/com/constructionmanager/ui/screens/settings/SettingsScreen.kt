@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -26,8 +27,17 @@ fun SettingsScreen(
     val isNotificationsEnabled by viewModel.notifications.collectAsState()
     val defaultRegion by viewModel.defaultRegion.collectAsState()
     val isOfflineMode by viewModel.offlineMode.collectAsState()
+    val currency by viewModel.currency.collectAsState()
+    val emailNotifications by viewModel.emailNotifications.collectAsState()
+    val smsNotifications by viewModel.smsNotifications.collectAsState()
+    val profile by viewModel.profile.collectAsState()
     var showRegionDialog by remember { mutableStateOf(false) }
+    var showCurrencyDialog by remember { mutableStateOf(false) }
+    var showNotifDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showSecurityDialog by remember { mutableStateOf(false) }
     val regionOptions = listOf("Northeast", "Southeast", "Midwest", "Southwest", "West")
+    val currencyOptions = listOf("USD ($)", "EUR (€)", "GBP (£)", "CAD (C$)", "AUD (A$)")
 
     val settingsSections =
         listOf(
@@ -41,14 +51,14 @@ fun SettingsScreen(
                 title = "Notifications",
                 items = listOf(
                     SettingsItem.Switch("Push Notifications", "Receive project updates", isNotificationsEnabled) { viewModel.setNotifications(it) },
-                    SettingsItem.Navigation("Notification Settings", "Customize notification preferences")
+                    SettingsItem.Navigation("Notification Settings", "Email, SMS and push", onClick = { showNotifDialog = true })
                 )
             ),
             SettingsSection(
                 title = "Regional Settings",
                 items = listOf(
                     SettingsItem.Selection("Default Region", "Set pricing region", defaultRegion, regionOptions, onClick = { showRegionDialog = true }) { viewModel.setDefaultRegion(it) },
-                    SettingsItem.Navigation("Currency Format", "USD ($)")
+                    SettingsItem.Navigation("Currency Format", currency, onClick = { showCurrencyDialog = true })
                 )
             ),
             SettingsSection(
@@ -68,8 +78,8 @@ fun SettingsScreen(
             SettingsSection(
                 title = "Account",
                 items = listOf(
-                    SettingsItem.Navigation("Profile Settings", "Edit personal information"),
-                    SettingsItem.Navigation("Security", "Password and authentication"),
+                    SettingsItem.Navigation("Profile Settings", "Edit personal information", onClick = { showProfileDialog = true }),
+                    SettingsItem.Navigation("Security", "Password and authentication", onClick = { showSecurityDialog = true }),
                     SettingsItem.Action("Sign Out", "Log out of your account", onLogout)
                 )
             )
@@ -101,6 +111,130 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showRegionDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showCurrencyDialog) {
+        AlertDialog(
+            onDismissRequest = { showCurrencyDialog = false },
+            title = { Text("Currency Format") },
+            text = {
+                Column {
+                    currencyOptions.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setCurrency(option)
+                                    showCurrencyDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = option == currency, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(option, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCurrencyDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showNotifDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotifDialog = false },
+            title = { Text("Notification Settings") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    NotificationToggleRow("Push notifications", isNotificationsEnabled) { viewModel.setNotifications(it) }
+                    NotificationToggleRow("Email notifications", emailNotifications) { viewModel.setEmailNotifications(it) }
+                    NotificationToggleRow("SMS notifications", smsNotifications) { viewModel.setSmsNotifications(it) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNotifDialog = false }) { Text("Done") }
+            }
+        )
+    }
+
+    if (showProfileDialog) {
+        var firstName by remember { mutableStateOf(profile?.firstName.orEmpty()) }
+        var lastName by remember { mutableStateOf(profile?.lastName.orEmpty()) }
+        var company by remember { mutableStateOf(profile?.company.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = { Text("Profile Settings") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!profile?.email.isNullOrBlank()) {
+                        Text(
+                            profile!!.email,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedTextField(firstName, { firstName = it }, label = { Text("First name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(lastName, { lastName = it }, label = { Text("Last name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(company, { company = it }, label = { Text("Company") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.saveProfile(firstName, lastName, company)
+                    showProfileDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfileDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showSecurityDialog) {
+        var newPassword by remember { mutableStateOf("") }
+        var confirmPassword by remember { mutableStateOf("") }
+        var message by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { showSecurityDialog = false },
+            title = { Text("Security") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Change your password", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(
+                        newPassword, { newPassword = it }, label = { Text("New password") },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        confirmPassword, { confirmPassword = it }, label = { Text("Confirm password") },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    message?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newPassword.length >= 6 && newPassword == confirmPassword,
+                    onClick = {
+                        viewModel.changePassword(newPassword) { result ->
+                            message = result.fold(
+                                onSuccess = { "Password updated." },
+                                onFailure = { "Couldn't update: ${it.message}" }
+                            )
+                        }
+                    }
+                ) { Text("Update") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSecurityDialog = false }) { Text("Close") }
             }
         )
     }
@@ -145,19 +279,22 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
+                            val displayName = listOfNotNull(profile?.firstName, profile?.lastName)
+                                .joinToString(" ").trim().ifBlank { "ConstructPro User" }
                             Text(
-                                text = "Demo Manager",
+                                text = displayName,
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "demo@constructionmanager.com",
+                                text = profile?.email ?: "Not signed in",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "Professional Tier",
+                                text = (profile?.subscriptionTier?.name ?: "FREE")
+                                    .lowercase().replaceFirstChar { it.uppercase() } + " Tier",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -237,7 +374,7 @@ private fun SettingsItemRow(item: SettingsItem) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { /* Navigate */ }
+                    .clickable { item.onClick() }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -324,6 +461,19 @@ private fun SettingsItemRow(item: SettingsItem) {
     }
 }
 
+@Composable
+private fun NotificationToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 private data class SettingsSection(
     val title: String,
     val items: List<SettingsItem>
@@ -339,7 +489,8 @@ private sealed class SettingsItem {
     
     data class Navigation(
         val title: String,
-        val subtitle: String = ""
+        val subtitle: String = "",
+        val onClick: () -> Unit = {}
     ) : SettingsItem()
     
     data class Selection(

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.ui.components.MaterialCard
 
@@ -27,6 +28,7 @@ fun MaterialsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var selectedMaterial by remember { mutableStateOf<Material?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.loadMaterials()
@@ -155,7 +157,7 @@ fun MaterialsScreen(
                         items(uiState.filteredMaterials) { material ->
                             MaterialCard(
                                 material = material,
-                                onClick = { /* Material detail view */ }
+                                onClick = { selectedMaterial = material }
                             )
                         }
                     }
@@ -172,6 +174,40 @@ fun MaterialsScreen(
                 showAddDialog = false
             }
         )
+    }
+
+    selectedMaterial?.let { material ->
+        AlertDialog(
+            onDismissRequest = { selectedMaterial = null },
+            title = { Text(material.name) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MaterialDetailRow("Category", material.category.name.replace("_", " "))
+                    MaterialDetailRow("Price", "$%,.2f / %s".format(material.currentPrice, material.unitOfMeasurement))
+                    if (material.supplier.isNotBlank()) MaterialDetailRow("Supplier", material.supplier)
+                    material.supplierSku?.let { MaterialDetailRow("SKU", it) }
+                    if (material.subcategory.isNotBlank()) MaterialDetailRow("Subcategory", material.subcategory)
+                    if (material.description.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(material.description, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedMaterial = null }) { Text("Close") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MaterialDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }
 

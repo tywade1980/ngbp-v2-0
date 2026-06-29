@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -17,9 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -48,6 +53,7 @@ fun PhotoDocumentationScreen(
     var selectedCategory by remember { mutableStateOf<PhotoCategory?>(null) }
     var selectedPhase by remember { mutableStateOf<ConstructionPhase?>(null) }
     var pendingCategory by remember { mutableStateOf(PhotoCategory.PROGRESS) }
+    var viewerPhoto by remember { mutableStateOf<PhotoViewModel.CapturedPhoto?>(null) }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         viewModel.onCaptureResult(success, projectId, pendingCategory)
@@ -179,7 +185,7 @@ fun PhotoDocumentationScreen(
                     }
                     item {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(photos) { photo -> CapturedPhotoThumb(photo) }
+                            items(photos) { photo -> CapturedPhotoThumb(photo) { viewerPhoto = photo } }
                         }
                     }
                 }
@@ -255,9 +261,52 @@ fun PhotoDocumentationScreen(
                 items(getSamplePhotoEntries()) { photoEntry ->
                     PhotoDocumentationCard(
                         photoEntry = photoEntry,
-                        onClick = { /* View photo details */ }
+                        onClick = { /* Sample entries have no stored image */ }
                     )
                 }
+            }
+        }
+    }
+
+    viewerPhoto?.let { photo ->
+        Dialog(
+            onDismissRequest = { viewerPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { viewerPhoto = null }
+            ) {
+                AsyncImage(
+                    model = photo.url ?: photo.uri,
+                    contentDescription = photo.category.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.Center)
+                )
+                IconButton(
+                    onClick = { viewerPhoto = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+                Text(
+                    text = photo.category.name.replace("_", " ") + when (photo.status) {
+                        PhotoViewModel.UploadStatus.UPLOADED -> " • synced to Firebase"
+                        PhotoViewModel.UploadStatus.UPLOADING -> " • uploading…"
+                        PhotoViewModel.UploadStatus.FAILED -> " • upload failed"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp)
+                )
             }
         }
     }
@@ -389,15 +438,18 @@ private fun PhotoDocumentationCard(
 }
 
 @Composable
-private fun CapturedPhotoThumb(photo: PhotoViewModel.CapturedPhoto) {
-    Box(modifier = Modifier.size(110.dp)) {
+private fun CapturedPhotoThumb(photo: PhotoViewModel.CapturedPhoto, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(110.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+    ) {
         AsyncImage(
             model = photo.url ?: photo.uri,
             contentDescription = photo.category.name,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .matchParentSize()
-                .clip(RoundedCornerShape(10.dp))
+            modifier = Modifier.matchParentSize()
         )
         when (photo.status) {
             PhotoViewModel.UploadStatus.UPLOADING ->
