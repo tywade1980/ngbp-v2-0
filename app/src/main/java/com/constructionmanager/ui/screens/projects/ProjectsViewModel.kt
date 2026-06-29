@@ -2,8 +2,7 @@ package com.constructionmanager.ui.screens.projects
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.constructionmanager.data.cloud.CloudProject
-import com.constructionmanager.data.cloud.CloudProjectRepository
+import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.ConstructionPhase
 import com.constructionmanager.domain.model.Project
 import com.constructionmanager.domain.model.ProjectStatus
@@ -32,7 +31,7 @@ data class ProjectsUiState(
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val cloudProjectRepository: CloudProjectRepository
+    private val cloudSync: CloudSync
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ProjectsUiState())
@@ -55,9 +54,11 @@ class ProjectsViewModel @Inject constructor(
     }
     
     fun loadProjects() {
+        // Pull any cloud projects into the local store (survives reinstall / other devices).
+        viewModelScope.launch { cloudSync.pullProjects() }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
+
             try {
                 projectRepository.getAllProjects().collect { projects ->
                     _uiState.value = _uiState.value.copy(
@@ -115,14 +116,7 @@ class ProjectsViewModel @Inject constructor(
                     updatedAt = now
                 )
                 projectRepository.insertProject(project)
-                cloudProjectRepository.pushProject(
-                    CloudProject(
-                        id = project.id,
-                        name = project.name,
-                        status = project.status.name,
-                        budget = budget.toDouble()
-                    )
-                )
+                cloudSync.pushProject(project)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message ?: "Failed to create project")
             }

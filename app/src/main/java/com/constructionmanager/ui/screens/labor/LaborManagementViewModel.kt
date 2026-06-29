@@ -2,7 +2,7 @@ package com.constructionmanager.ui.screens.labor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.constructionmanager.data.cloud.CloudMirror
+import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -37,7 +37,7 @@ data class LaborManagementUiState(
 
 @HiltViewModel
 class LaborManagementViewModel @Inject constructor(
-    private val cloudMirror: CloudMirror
+    private val cloudSync: CloudSync
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LaborManagementUiState())
@@ -53,14 +53,17 @@ class LaborManagementViewModel @Inject constructor(
             try {
                 // Load mock data for demonstration
                 val mockWorkers = createMockWorkers()
+                // Cloud workers (persisted) take precedence; sample workers fill out the demo roster.
+                val cloudWorkers = cloudSync.pullWorkers().getOrDefault(emptyList())
+                val mergedWorkers = (cloudWorkers + mockWorkers).distinctBy { it.id }
                 val mockLaborEntries = createMockLaborEntries()
                 val mockCostsByTrade = createMockCostsByTrade()
                 val mockHourlyRates = createMockHourlyRates()
-                
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    workers = mockWorkers,
-                    filteredWorkers = mockWorkers,
+                    workers = mergedWorkers,
+                    filteredWorkers = mergedWorkers,
                     recentLaborEntries = mockLaborEntries,
                     todaysTotalHours = 64.5,
                     todaysTotalCost = 2580.0,
@@ -144,19 +147,7 @@ class LaborManagementViewModel @Inject constructor(
                 else updatedWorkers.filter { it.tradeTypes.contains(selected) },
                 activeWorkersCount = updatedWorkers.size
             )
-            cloudMirror.push(
-                collection = "workers",
-                id = worker.id,
-                data = mapOf(
-                    "firstName" to worker.firstName,
-                    "lastName" to worker.lastName,
-                    "trade" to trade.name,
-                    "skillLevel" to skillLevel.name,
-                    "hourlyRate" to rate.toDouble(),
-                    "phone" to worker.phone,
-                    "email" to worker.email
-                )
-            )
+            cloudSync.pushWorker(worker)
         }
     }
 

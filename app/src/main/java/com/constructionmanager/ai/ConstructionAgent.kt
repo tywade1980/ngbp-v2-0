@@ -1,15 +1,15 @@
 package com.constructionmanager.ai
 
-import com.constructionmanager.data.cloud.CloudMirror
-import com.constructionmanager.data.cloud.CloudProject
-import com.constructionmanager.data.cloud.CloudProjectRepository
+import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.ConstructionPhase
 import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.domain.model.Project
 import com.constructionmanager.domain.model.ProjectStatus
 import com.constructionmanager.domain.model.ProjectType
+import com.constructionmanager.domain.model.SkillLevel
 import com.constructionmanager.domain.model.TradeType
+import com.constructionmanager.domain.model.Worker
 import com.constructionmanager.domain.repository.MaterialRepository
 import com.constructionmanager.domain.repository.ProjectRepository
 import kotlinx.coroutines.Dispatchers
@@ -42,8 +42,7 @@ import javax.inject.Singleton
 class ConstructionAgent @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val materialRepository: MaterialRepository,
-    private val cloudProjectRepository: CloudProjectRepository,
-    private val cloudMirror: CloudMirror
+    private val cloudSync: CloudSync
 ) {
     data class Outcome(val text: String)
 
@@ -91,9 +90,7 @@ class ConstructionAgent @Inject constructor(
             updatedAt = now
         )
         projectRepository.insertProject(project)
-        cloudProjectRepository.pushProject(
-            CloudProject(id = project.id, name = name, status = project.status.name, budget = budget.toDouble())
-        )
+        cloudSync.pushProject(project)
 
         val details = buildString {
             append("✅ Created project \"$name\"")
@@ -125,15 +122,7 @@ class ConstructionAgent @Inject constructor(
             lastPriceUpdate = now
         )
         materialRepository.insertMaterial(material)
-        cloudMirror.push(
-            collection = "materials",
-            id = material.id,
-            data = mapOf(
-                "name" to name,
-                "category" to category.name,
-                "price" to price.toDouble()
-            )
-        )
+        cloudSync.pushMaterial(material)
         return Outcome(
             "✅ Added \"$name\" (${category.name.lowercase()}" +
                 (if (price > BigDecimal.ZERO) " at ${money(price)}" else "") +
@@ -145,16 +134,20 @@ class ConstructionAgent @Inject constructor(
         val name = extractName(message) ?: "New Worker"
         val rate = extractMoney(message) ?: BigDecimal.ZERO
         val trade = detectTrade(message.lowercase())
-        val id = "worker_${System.currentTimeMillis()}"
-        cloudMirror.push(
-            collection = "workers",
-            id = id,
-            data = mapOf(
-                "name" to name,
-                "trade" to trade.name,
-                "hourlyRate" to rate.toDouble()
-            )
+        val parts = name.split(" ").filter { it.isNotBlank() }
+        val worker = Worker(
+            id = "worker_${System.currentTimeMillis()}",
+            firstName = parts.firstOrNull() ?: name,
+            lastName = parts.drop(1).joinToString(" "),
+            email = "",
+            phone = "",
+            tradeTypes = listOf(trade),
+            skillLevel = SkillLevel.JOURNEYMAN,
+            certifications = emptyList(),
+            hourlyRate = rate,
+            hireDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
         )
+        cloudSync.pushWorker(worker)
         return Outcome(
             "✅ Added $name as a ${trade.name.replace("_", " ").lowercase()}" +
                 (if (rate > BigDecimal.ZERO) " at ${money(rate)}/hr" else "") +

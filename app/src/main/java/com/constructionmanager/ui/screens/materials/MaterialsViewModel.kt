@@ -2,7 +2,7 @@ package com.constructionmanager.ui.screens.materials
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.constructionmanager.data.cloud.CloudMirror
+import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.domain.repository.MaterialRepository
@@ -27,7 +27,7 @@ data class MaterialsUiState(
 @HiltViewModel
 class MaterialsViewModel @Inject constructor(
     private val materialRepository: MaterialRepository,
-    private val cloudMirror: CloudMirror
+    private val cloudSync: CloudSync
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(MaterialsUiState())
@@ -50,9 +50,11 @@ class MaterialsViewModel @Inject constructor(
     }
     
     fun loadMaterials() {
+        // Pull any cloud materials into the local catalog (survives reinstall / other devices).
+        viewModelScope.launch { cloudSync.pullMaterials() }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
+
             try {
                 // Load categories
                 val categories = materialRepository.getAllCategories()
@@ -107,17 +109,7 @@ class MaterialsViewModel @Inject constructor(
                     lastPriceUpdate = now
                 )
                 materialRepository.insertMaterial(material)
-                cloudMirror.push(
-                    collection = "materials",
-                    id = material.id,
-                    data = mapOf(
-                        "name" to material.name,
-                        "category" to category.name,
-                        "unit" to material.unitOfMeasurement,
-                        "price" to priceValue.toDouble(),
-                        "supplier" to material.supplier
-                    )
-                )
+                cloudSync.pushMaterial(material)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message ?: "Failed to add material")
             }
