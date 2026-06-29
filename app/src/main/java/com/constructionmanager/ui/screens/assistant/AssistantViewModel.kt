@@ -26,9 +26,10 @@ data class ChatMessage(
 data class AssistantUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
-            text = "Hi Tyler — Caroline here. I can answer questions and take action. Try " +
-                "\"create a project called Maple Kitchen for the Reyes family, budget \$48k\", " +
-                "\"add a worker named Sam, electrician at \$45/hr\", or \"how many projects do I have?\"",
+            text = "Hi Tyler — Caroline here. I know construction practices and ballpark pricing, and I can " +
+                "take action. Try \"estimate drywall for 1,200 sq ft\", \"how much does an electrician cost?\", " +
+                "\"cost of a 2x4\", \"what's the construction phase sequence?\", or " +
+                "\"create a project called Maple Kitchen, budget \$48k\".",
             fromUser = false
         )
     ),

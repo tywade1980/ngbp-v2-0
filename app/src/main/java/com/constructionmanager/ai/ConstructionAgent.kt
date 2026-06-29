@@ -1,5 +1,6 @@
 package com.constructionmanager.ai
 
+import com.constructionmanager.ai.knowledge.ConstructionEstimator
 import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.ConstructionPhase
 import com.constructionmanager.domain.model.Material
@@ -54,7 +55,8 @@ class ConstructionAgent @Inject constructor(
             isCreate(m) && mentionsWorker(m) -> addWorker(message)
             mentionsList(m) && m.contains("project") -> listProjects()
             m.contains("budget") && m.contains("project") -> budgetSummary()
-            else -> null
+            // Construction knowledge: estimates, pricing, labor rates, how-to/process.
+            else -> ConstructionEstimator.answer(message)?.let { Outcome(it) }
         }
     }
 
