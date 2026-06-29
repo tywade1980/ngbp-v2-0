@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Photo Documentation uploads live at users/{uid}/projects/{projectId}/photos/{file}.
+// A signed-in user can read/write only files under their own uid.
+//
+// Deploy with:  firebase deploy --only storage --project nextgenbuildpro
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // OPTIONAL — development only; lets the local demo upload without auth.
+    // Remove for production (use a real account instead).
+    // match /users/demo_user_001/{allPaths=**} {
+    //   allow read, write: if true;
+    // }
+  }
+}
