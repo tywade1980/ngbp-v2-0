@@ -1,5 +1,7 @@
 package com.constructionmanager.ui.screens.settings
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -31,6 +34,7 @@ fun SettingsScreen(
     val emailNotifications by viewModel.emailNotifications.collectAsState()
     val smsNotifications by viewModel.smsNotifications.collectAsState()
     val profile by viewModel.profile.collectAsState()
+    val context = LocalContext.current
     var showRegionDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showNotifDialog by remember { mutableStateOf(false) }
@@ -65,7 +69,9 @@ fun SettingsScreen(
                 title = "Data & Storage",
                 items = listOf(
                     SettingsItem.Switch("Offline Mode", "Store data locally", isOfflineMode) { viewModel.setOfflineMode(it) },
-                    SettingsItem.Navigation("Data Export", "Export project data"),
+                    SettingsItem.Navigation("Data Export", "Export projects & materials", onClick = {
+                        viewModel.exportData { shareData(context, it) }
+                    }),
                     SettingsItem.Navigation("Backup & Sync", "Cloud backup settings")
                 )
             ),
@@ -472,6 +478,15 @@ private fun NotificationToggleRow(label: String, checked: Boolean, onChange: (Bo
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Switch(checked = checked, onCheckedChange = onChange)
     }
+}
+
+private fun shareData(context: Context, text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "ConstructPro data export")
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, "Export data"))
 }
 
 private data class SettingsSection(

@@ -1,6 +1,9 @@
 package com.constructionmanager.data.cloud
 
 import com.constructionmanager.domain.model.ConstructionPhase
+import com.constructionmanager.domain.model.LaborCategory
+import com.constructionmanager.domain.model.LaborEntry
+import com.constructionmanager.domain.model.LaborEntryStatus
 import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.domain.model.Project
@@ -16,6 +19,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
@@ -56,6 +60,10 @@ class CloudSync @Inject constructor(
         col("workers").document(worker.id).set(CloudCodec.workerToMap(worker)).await()
     }
 
+    suspend fun pushLaborEntry(entry: LaborEntry): Result<Unit> = runCatching {
+        col("labor_entries").document(entry.id).set(CloudCodec.laborEntryToMap(entry)).await()
+    }
+
     // ---- reads (upsert into local store) ------------------------------------
 
     /** Pulls cloud projects into Room (REPLACE upsert). Returns how many were synced. */
@@ -85,6 +93,12 @@ class CloudSync @Inject constructor(
     suspend fun pullWorkers(): Result<List<Worker>> = runCatching {
         col("workers").get().await().documents.mapNotNull { doc ->
             doc.data?.let { CloudCodec.mapToWorker(it) }
+        }
+    }
+
+    suspend fun pullLaborEntries(): Result<List<LaborEntry>> = runCatching {
+        col("labor_entries").get().await().documents.mapNotNull { doc ->
+            doc.data?.let { CloudCodec.mapToLaborEntry(it) }
         }
     }
 }
@@ -211,6 +225,60 @@ object CloudCodec {
         )
     }
 
+    fun laborEntryToMap(e: LaborEntry): Map<String, Any?> = mapOf(
+        "id" to e.id,
+        "projectId" to e.projectId,
+        "workerId" to e.workerId,
+        "workerName" to e.workerName,
+        "date" to e.date.toString(),
+        "startTime" to e.startTime.toString(),
+        "endTime" to e.endTime.toString(),
+        "regularHours" to e.regularHours,
+        "overtimeHours" to e.overtimeHours,
+        "hourlyRate" to e.hourlyRate.toString(),
+        "overtimeRate" to e.overtimeRate.toString(),
+        "totalCost" to e.totalCost.toString(),
+        "taskDescription" to e.taskDescription,
+        "phase" to e.phase.name,
+        "status" to e.status.name,
+        "trade" to e.laborCategory.tradeType.name,
+        "skillLevel" to e.laborCategory.skillLevel.name,
+        "updatedAtMs" to System.currentTimeMillis()
+    )
+
+    fun mapToLaborEntry(m: Map<String, Any?>): LaborEntry? {
+        val id = m["id"] as? String ?: return null
+        val rate = bigDecimal(m["hourlyRate"]) ?: BigDecimal.ZERO
+        val otRate = bigDecimal(m["overtimeRate"]) ?: rate
+        return LaborEntry(
+            id = id,
+            projectId = str(m, "projectId"),
+            workerId = str(m, "workerId"),
+            workerName = str(m, "workerName"),
+            laborCategoryId = "tracked",
+            laborCategory = LaborCategory(
+                id = "tracked",
+                name = "Tracked Time",
+                tradeType = enumOr(m["trade"] as? String, TradeType.GENERAL_LABOR),
+                skillLevel = enumOr(m["skillLevel"] as? String, SkillLevel.JOURNEYMAN),
+                hourlyRate = rate,
+                overtimeRate = otRate,
+                description = "Time tracked in app"
+            ),
+            date = parseDate(m["date"] as? String) ?: todayDate(),
+            startTime = parseTime(m["startTime"] as? String) ?: LocalTime(0, 0),
+            endTime = parseTime(m["endTime"] as? String) ?: LocalTime(0, 0),
+            regularHours = (m["regularHours"] as? Number)?.toDouble() ?: 0.0,
+            overtimeHours = (m["overtimeHours"] as? Number)?.toDouble() ?: 0.0,
+            hourlyRate = rate,
+            overtimeRate = otRate,
+            totalCost = bigDecimal(m["totalCost"]) ?: BigDecimal.ZERO,
+            taskDescription = str(m, "taskDescription"),
+            phase = enumOr(m["phase"] as? String, ConstructionPhase.FRAMING),
+            status = enumOr(m["status"] as? String, LaborEntryStatus.PENDING)
+        )
+    }
+
     // ---- helpers -------------------------------------------------------------
 
     private fun str(m: Map<String, Any?>, key: String): String = m[key] as? String ?: ""
@@ -223,6 +291,9 @@ object CloudCodec {
 
     private fun parseDateTime(s: String?): LocalDateTime? =
         s?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+
+    private fun parseTime(s: String?): LocalTime? =
+        s?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
     private fun bigDecimal(v: Any?): BigDecimal? = when (v) {
         is String -> v.toBigDecimalOrNull()

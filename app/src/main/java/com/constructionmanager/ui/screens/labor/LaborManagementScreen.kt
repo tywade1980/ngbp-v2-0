@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.constructionmanager.domain.model.SkillLevel
 import com.constructionmanager.domain.model.TradeType
+import com.constructionmanager.domain.model.Worker
 import com.constructionmanager.ui.components.LaborEntryCard
 import com.constructionmanager.ui.components.WorkerCard
 
@@ -238,6 +239,9 @@ private fun TimeTrackingTab(
         // Quick time entry
         item {
             QuickTimeEntryCard(
+                workers = uiState.workers,
+                selectedWorkerId = uiState.selectedWorkerId,
+                onSelectWorker = { viewModel.selectWorker(it) },
                 onStartTimer = { viewModel.startTimeTracking() },
                 onStopTimer = { viewModel.stopTimeTracking() },
                 isTracking = uiState.isTimeTracking,
@@ -356,6 +360,9 @@ private fun LaborCostsTab(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuickTimeEntryCard(
+    workers: List<Worker>,
+    selectedWorkerId: String?,
+    onSelectWorker: (String?) -> Unit,
     onStartTimer: () -> Unit,
     onStopTimer: () -> Unit,
     isTracking: Boolean,
@@ -382,7 +389,7 @@ private fun QuickTimeEntryCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                
+
                 if (isTracking) {
                     Text(
                         text = currentDuration,
@@ -390,6 +397,35 @@ private fun QuickTimeEntryCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                }
+            }
+
+            if (workers.isNotEmpty()) {
+                var menuOpen by remember { mutableStateOf(false) }
+                val selected = workers.firstOrNull { it.id == selectedWorkerId } ?: workers.first()
+                ExposedDropdownMenuBox(
+                    expanded = menuOpen,
+                    onExpandedChange = { if (!isTracking) menuOpen = it }
+                ) {
+                    OutlinedTextField(
+                        value = "${selected.firstName} ${selected.lastName}".trim(),
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = !isTracking,
+                        label = { Text("Worker") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuOpen) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        workers.forEach { w ->
+                            DropdownMenuItem(
+                                text = { Text("${w.firstName} ${w.lastName}".trim()) },
+                                onClick = { onSelectWorker(w.id); menuOpen = false }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -403,7 +439,7 @@ private fun QuickTimeEntryCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isTracking) "Stop Timer" else "Start Timer")
+                Text(if (isTracking) "Stop Timer & Log" else "Start Timer")
             }
         }
     }

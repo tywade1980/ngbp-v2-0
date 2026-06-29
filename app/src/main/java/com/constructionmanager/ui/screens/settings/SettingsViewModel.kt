@@ -5,17 +5,22 @@ import androidx.lifecycle.viewModelScope
 import com.constructionmanager.data.settings.SettingsStore
 import com.constructionmanager.domain.model.User
 import com.constructionmanager.domain.repository.AuthRepository
+import com.constructionmanager.domain.repository.MaterialRepository
+import com.constructionmanager.domain.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val store: SettingsStore,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val projectRepository: ProjectRepository,
+    private val materialRepository: MaterialRepository
 ) : ViewModel() {
 
     val darkTheme: StateFlow<Boolean> = store.darkTheme
@@ -52,6 +57,29 @@ class SettingsViewModel @Inject constructor(
     fun changePassword(newPassword: String, onResult: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             onResult(runCatching { authRepository.changePassword("", newPassword) })
+        }
+    }
+
+    /** Builds a plain-text export of the user's data and hands it back for sharing. */
+    fun exportData(onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val projects = runCatching { projectRepository.getAllProjects().first() }.getOrDefault(emptyList())
+            val materials = runCatching { materialRepository.getAllActiveMaterials().first() }.getOrDefault(emptyList())
+            val text = buildString {
+                appendLine("ConstructPro — Data Export")
+                appendLine("=".repeat(40))
+                appendLine()
+                appendLine("PROJECTS (${projects.size})")
+                projects.forEach {
+                    appendLine("• ${it.name} — ${it.status.name.lowercase()} — $${it.totalBudget} — ${it.clientName}")
+                }
+                appendLine()
+                appendLine("MATERIALS (${materials.size})")
+                materials.forEach {
+                    appendLine("• ${it.name} — ${it.category.name.lowercase()} @ $${it.currentPrice}/${it.unitOfMeasurement}")
+                }
+            }
+            onReady(text)
         }
     }
 }
