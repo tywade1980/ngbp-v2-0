@@ -117,9 +117,10 @@ fun AssistantScreen(
             memoryUrl = state.memoryUrl,
             carolineUrl = state.carolineUrl,
             userId = state.userId,
+            webSearchApiKey = state.webSearchApiKey,
             onDismiss = { showSettings = false },
-            onSave = { remote, orch, mem, caroline, user ->
-                viewModel.saveBackend(remote, orch, mem, caroline, user)
+            onSave = { remote, orch, mem, caroline, user, webKey ->
+                viewModel.saveBackend(remote, orch, mem, caroline, user, webKey)
                 showSettings = false
             }
         )
@@ -180,7 +181,7 @@ private fun MessageBubble(msg: ChatMessage) {
         }
         if (!msg.fromUser) {
             Text(
-                text = if (msg.live) "live • orchestrator + memory" else "on-device",
+                text = msg.provenance ?: if (msg.live) "live • orchestrator + memory" else "on-device",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, start = 4.dp)
@@ -229,14 +230,16 @@ private fun BackendSettingsSheet(
     memoryUrl: String,
     carolineUrl: String,
     userId: String,
+    webSearchApiKey: String,
     onDismiss: () -> Unit,
-    onSave: (Boolean, String, String, String, String) -> Unit
+    onSave: (Boolean, String, String, String, String, String) -> Unit
 ) {
     var remote by remember { mutableStateOf(remoteEnabled) }
     var orch by remember { mutableStateOf(orchestratorUrl) }
     var mem by remember { mutableStateOf(memoryUrl) }
     var caroline by remember { mutableStateOf(carolineUrl) }
     var user by remember { mutableStateOf(userId) }
+    var webKey by remember { mutableStateOf(webSearchApiKey) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -278,8 +281,21 @@ private fun BackendSettingsSheet(
                 label = { Text("User ID") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Divider()
+            Text("Web Search (Tavily)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Paste a free Tavily API key to let Caroline search the web (\"search …\", \"look up …\"). " +
+                    "Leave blank to use bundled knowledge only.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = webKey, onValueChange = { webKey = it },
+                label = { Text("Tavily API key") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             Button(
-                onClick = { onSave(remote, orch, mem, caroline, user) },
+                onClick = { onSave(remote, orch, mem, caroline, user, webKey) },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Save") }
         }

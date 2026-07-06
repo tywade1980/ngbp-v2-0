@@ -85,3 +85,31 @@ heuristic threshold in the Voice tab. No servers required.
    `:8888/` for mem0, `:8001/` for Caroline).
 3. The assistant now reasons via the orchestrator, recalls/stores context in mem0, and the
    Voice tab shows qualified leads and transcripts from Caroline.
+
+---
+
+## End-to-end feature completion
+
+The unified app is wired through end to end, not just stubbed:
+
+- **Live call screening.** `CarolineCallScreeningService` is now a Hilt `@AndroidEntryPoint`. When
+  the Wade backend is enabled it asks the live Caroline receptionist (`/screen`) within a short time
+  budget and honors its `allow`/`block`/`transfer` decision; otherwise (or on timeout) it falls back
+  to the on-device risk heuristic, so screening always works offline.
+- **One-tap activation.** The Voice tab can request Android's call-screening role
+  (`RoleManager.ROLE_CALL_SCREENING`) and reflects whether Caroline currently holds it.
+- **Backend connectivity.** `AssistantRepository.ping()` probes the orchestrator `/health` for the
+  settings UI.
+
+## Over-the-air (OTA) updates
+
+Because this is a native Kotlin app (not Expo/React Native), it ships **native** OTA rather than a
+JS-bundle swap — two complementary paths under `update/`:
+
+- **Google Play In-App Updates** (`com.google.android.play:app-update`) — `MainActivity` offers a
+  flexible update when the app was installed from Play, with a "Restart to install" prompt.
+- **Self-hosted APK channel** — the **Updates** screen (Dashboard → *Updates*, Settings →
+  *App Updates*) checks a configurable JSON manifest, and on a newer `versionCode` downloads the APK
+  with `DownloadManager` and installs it via a `FileProvider`. This is the relevant path for an
+  internal/sideloaded pro tool. See [`ota/README.md`](./ota/README.md) for the release process and
+  manifest format.

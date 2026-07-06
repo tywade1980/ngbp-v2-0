@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructionmanager.ai.AssistantReply
 import com.constructionmanager.ai.AssistantRepository
+import com.constructionmanager.data.assistant.ChatHistoryStore
 import com.constructionmanager.data.network.wade.WadeBackendConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,14 +19,17 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val fromUser: Boolean,
-    val live: Boolean = false
+    val live: Boolean = false,
+    val provenance: String? = null
 )
 
 data class AssistantUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
-            text = "Hi Tyler — Caroline here. Ask me for an estimate, a briefing, a material lookup, " +
-                "or anything across your projects.",
+            text = "Hi Tyler — Caroline here. I know construction practices and ballpark pricing, and I can " +
+                "take action. Try \"estimate drywall for 1,200 sq ft\", \"how much does an electrician cost?\", " +
+                "\"cost of a 2x4\", \"what's the construction phase sequence?\", or " +
+                "\"create a project called Maple Kitchen, budget \$48k\".",
             fromUser = false
         )
     ),
@@ -36,26 +40,53 @@ data class AssistantUiState(
     val orchestratorUrl: String = "",
     val memoryUrl: String = "",
     val carolineUrl: String = "",
-    val userId: String = ""
+    val userId: String = "",
+    val webSearchApiKey: String = ""
 )
 
 @HiltViewModel
 class AssistantViewModel @Inject constructor(
     private val repository: AssistantRepository,
-    private val config: WadeBackendConfig
+    private val config: WadeBackendConfig,
+    private val chatHistoryStore: ChatHistoryStore
 ) : ViewModel() {
 
     private val sessionId = UUID.randomUUID().toString()
     private val _uiState = MutableStateFlow(loadState())
     val uiState: StateFlow<AssistantUiState> = _uiState.asStateFlow()
 
-    private fun loadState() = AssistantUiState(
-        remoteEnabled = config.remoteEnabled,
-        orchestratorUrl = config.orchestratorUrl,
-        memoryUrl = config.memoryUrl,
-        carolineUrl = config.carolineUrl,
-        userId = config.userId
-    )
+    private fun loadState(): AssistantUiState {
+        val persisted = chatHistoryStore.load()
+        val messages = if (persisted.isEmpty()) {
+            AssistantUiState().messages
+        } else {
+            persisted.map {
+                ChatMessage(
+                    text = it.text,
+                    fromUser = it.fromUser,
+                    live = it.provenance?.startsWith("live") == true,
+                    provenance = it.provenance
+                )
+            }
+        }
+        return AssistantUiState(
+            messages = messages,
+            remoteEnabled = config.remoteEnabled,
+            orchestratorUrl = config.orchestratorUrl,
+            memoryUrl = config.memoryUrl,
+            carolineUrl = config.carolineUrl,
+            userId = config.userId,
+            webSearchApiKey = config.webSearchApiKey
+        )
+    }
+
+    private fun persistHistory() {
+        chatHistoryStore.save(
+            _uiState.value.messages.map {
+                ChatHistoryStore.StoredMessage(it.text, it.fromUser, it.provenance)
+            }
+        )
+    }
 
     fun onInputChange(value: String) = _uiState.update { it.copy(input = value) }
 
@@ -101,11 +132,18 @@ class AssistantViewModel @Inject constructor(
                 messages = it.messages + ChatMessage(
                     text = reply.text,
                     fromUser = false,
-                    live = reply.source == AssistantReply.Source.LIVE
+                    live = reply.source == AssistantReply.Source.LIVE,
+                    provenance = when (reply.source) {
+                        AssistantReply.Source.LIVE -> "live • orchestrator + memory"
+                        AssistantReply.Source.AGENT -> "agent • action taken"
+                        AssistantReply.Source.OFFLINE -> "on-device"
+                        AssistantReply.Source.WEB -> "web • tavily"
+                    }
                 ),
                 isSending = false
             )
         }
+        persistHistory()
     }
 
     fun saveBackend(
@@ -113,20 +151,23 @@ class AssistantViewModel @Inject constructor(
         orchestratorUrl: String,
         memoryUrl: String,
         carolineUrl: String,
-        userId: String
+        userId: String,
+        webSearchApiKey: String
     ) {
         config.remoteEnabled = remoteEnabled
         config.orchestratorUrl = orchestratorUrl
         config.memoryUrl = memoryUrl
         config.carolineUrl = carolineUrl
         if (userId.isNotBlank()) config.userId = userId
+        config.webSearchApiKey = webSearchApiKey
         _uiState.update {
             it.copy(
                 remoteEnabled = config.remoteEnabled,
                 orchestratorUrl = config.orchestratorUrl,
                 memoryUrl = config.memoryUrl,
                 carolineUrl = config.carolineUrl,
-                userId = config.userId
+                userId = config.userId,
+                webSearchApiKey = config.webSearchApiKey
             )
         }
     }

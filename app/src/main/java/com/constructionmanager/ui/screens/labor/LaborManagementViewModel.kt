@@ -2,13 +2,22 @@ package com.constructionmanager.ui.screens.labor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.data.cloud.CloudSync
 import com.constructionmanager.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
+import java.math.BigDecimal
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.seconds
 
 data class LaborManagementUiState(
     val isLoading: Boolean = true,
@@ -16,6 +25,7 @@ data class LaborManagementUiState(
     val workers: List<Worker> = emptyList(),
     val filteredWorkers: List<Worker> = emptyList(),
     val selectedTradeType: TradeType? = null,
+    val selectedWorkerId: String? = null,
     val isTimeTracking: Boolean = false,
     val currentTrackingDuration: String = "00:00:00",
     val todaysTotalHours: Double = 0.0,
@@ -30,11 +40,14 @@ data class LaborManagementUiState(
 
 @HiltViewModel
 class LaborManagementViewModel @Inject constructor(
-    // Repository dependencies would be injected here
+    private val cloudSync: CloudSync
 ) : ViewModel() {
-    
+
     private val _uiState = MutableStateFlow(LaborManagementUiState())
     val uiState: StateFlow<LaborManagementUiState> = _uiState.asStateFlow()
+
+    private var timerJob: Job? = null
+    private var elapsedSeconds = 0
     
     fun loadLaborData() {
         viewModelScope.launch {
@@ -43,15 +56,23 @@ class LaborManagementViewModel @Inject constructor(
             try {
                 // Load mock data for demonstration
                 val mockWorkers = createMockWorkers()
+                // Cloud workers (persisted) take precedence; sample workers fill out the demo roster.
+                val cloudWorkers = cloudSync.pullWorkers().getOrDefault(emptyList())
+                val mergedWorkers = (cloudWorkers + mockWorkers).distinctBy { it.id }
                 val mockLaborEntries = createMockLaborEntries()
+                // Persisted entries (tracked time) take precedence, newest first.
+                val cloudEntries = cloudSync.pullLaborEntries().getOrDefault(emptyList())
+                val mergedEntries = (cloudEntries + mockLaborEntries)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.date }
                 val mockCostsByTrade = createMockCostsByTrade()
                 val mockHourlyRates = createMockHourlyRates()
-                
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    workers = mockWorkers,
-                    filteredWorkers = mockWorkers,
-                    recentLaborEntries = mockLaborEntries,
+                    workers = mergedWorkers,
+                    filteredWorkers = mergedWorkers,
+                    recentLaborEntries = mergedEntries,
                     todaysTotalHours = 64.5,
                     todaysTotalCost = 2580.0,
                     activeWorkersCount = 8,
@@ -83,13 +104,122 @@ class LaborManagementViewModel @Inject constructor(
     }
     
     fun startTimeTracking() {
-        _uiState.value = _uiState.value.copy(isTimeTracking = true)
-        // Start timer logic would go here
+        if (_uiState.value.isTimeTracking) return
+        elapsedSeconds = 0
+        _uiState.value = _uiState.value.copy(isTimeTracking = true, currentTrackingDuration = "00:00:00")
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                elapsedSeconds++
+                _uiState.value = _uiState.value.copy(currentTrackingDuration = formatDuration(elapsedSeconds))
+            }
+        }
     }
-    
+
     fun stopTimeTracking() {
+        timerJob?.cancel()
+        timerJob = null
+        val seconds = elapsedSeconds
         _uiState.value = _uiState.value.copy(isTimeTracking = false)
-        // Stop timer and save entry logic would go here
+        if (seconds > 0) logTrackedTime(seconds)
+    }
+
+    fun selectWorker(workerId: String?) {
+        _uiState.value = _uiState.value.copy(selectedWorkerId = workerId)
+    }
+
+    /** Turns a tracked duration into a persisted LaborEntry attributed to the selected worker. */
+    private fun logTrackedTime(seconds: Int) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val worker = state.workers.firstOrNull { it.id == state.selectedWorkerId }
+                ?: state.workers.firstOrNull()
+            val hours = seconds / 3600.0
+            val rate = worker?.hourlyRate ?: BigDecimal.ZERO
+            val overtimeRate = rate.multiply(BigDecimal("1.5"))
+            val cost = rate.multiply(BigDecimal.valueOf(hours))
+            val tz = TimeZone.currentSystemDefault()
+            val nowInstant = Clock.System.now()
+            val endLdt = nowInstant.toLocalDateTime(tz)
+            val startLdt = nowInstant.minus(seconds.seconds).toLocalDateTime(tz)
+            val entry = LaborEntry(
+                id = "entry_${System.currentTimeMillis()}",
+                projectId = "",
+                workerId = worker?.id ?: "",
+                workerName = worker?.let { "${it.firstName} ${it.lastName}".trim() }?.ifBlank { "Tracked time" }
+                    ?: "Tracked time",
+                laborCategoryId = "tracked",
+                laborCategory = LaborCategory(
+                    id = "tracked",
+                    name = "Tracked Time",
+                    tradeType = worker?.tradeTypes?.firstOrNull() ?: TradeType.GENERAL_LABOR,
+                    skillLevel = worker?.skillLevel ?: SkillLevel.JOURNEYMAN,
+                    hourlyRate = rate,
+                    overtimeRate = overtimeRate,
+                    description = "Time tracked in app"
+                ),
+                date = endLdt.date,
+                startTime = startLdt.time,
+                endTime = endLdt.time,
+                regularHours = hours,
+                hourlyRate = rate,
+                overtimeRate = overtimeRate,
+                totalCost = cost,
+                taskDescription = "Tracked time",
+                phase = ConstructionPhase.FRAMING,
+                status = LaborEntryStatus.PENDING
+            )
+            cloudSync.pushLaborEntry(entry)
+            _uiState.value = _uiState.value.copy(
+                recentLaborEntries = listOf(entry) + _uiState.value.recentLaborEntries,
+                todaysTotalHours = _uiState.value.todaysTotalHours + hours,
+                todaysTotalCost = _uiState.value.todaysTotalCost + cost.toDouble()
+            )
+        }
+    }
+
+    /** Adds a worker to the roster (in-memory list) and mirrors it to Firestore. */
+    fun addWorker(
+        firstName: String,
+        lastName: String,
+        trade: TradeType,
+        skillLevel: SkillLevel,
+        hourlyRate: String,
+        phone: String,
+        email: String
+    ) {
+        if (firstName.isBlank() && lastName.isBlank()) return
+        viewModelScope.launch {
+            val rate = hourlyRate.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val worker = Worker(
+                id = "worker_${System.currentTimeMillis()}",
+                firstName = firstName.trim(),
+                lastName = lastName.trim(),
+                email = email.trim(),
+                phone = phone.trim(),
+                tradeTypes = listOf(trade),
+                skillLevel = skillLevel,
+                certifications = emptyList(),
+                hourlyRate = rate,
+                hireDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            )
+            val updatedWorkers = listOf(worker) + _uiState.value.workers
+            val selected = _uiState.value.selectedTradeType
+            _uiState.value = _uiState.value.copy(
+                workers = updatedWorkers,
+                filteredWorkers = if (selected == null) updatedWorkers
+                else updatedWorkers.filter { it.tradeTypes.contains(selected) },
+                activeWorkersCount = updatedWorkers.size
+            )
+            cloudSync.pushWorker(worker)
+        }
+    }
+
+    private fun formatDuration(totalSeconds: Int): String {
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val s = totalSeconds % 60
+        return "%02d:%02d:%02d".format(h, m, s)
     }
     
     private fun createMockWorkers(): List<Worker> {

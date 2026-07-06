@@ -1,0 +1,10 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkUrl": "https://github.com/tywade1980/ngbp-v2-0/releases/latest/download/app-release.apk",
+  "releaseNotes": "Current stable release of ConstructPro AI.",
+  "mandatory": false,
+  "minSupportedVersionCode": 1,
+  "sizeBytes": 0,
+  "sha256": null
+}

@@ -30,6 +30,7 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToAssistant: () -> Unit = {},
     onNavigateToVoice: () -> Unit = {},
+    onNavigateToUpdates: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -87,6 +88,15 @@ fun DashboardScreen(
                 }
             }
             
+            // Cloud (Firebase) connection status
+            item {
+                CloudStatusCard(
+                    connected = uiState.cloudConnected,
+                    projectId = uiState.cloudProjectId,
+                    projectCount = uiState.cloudProjectCount
+                )
+            }
+
             // Quick Actions
             item {
                 Text(
@@ -148,6 +158,13 @@ fun DashboardScreen(
                             title = "Reports",
                             icon = Icons.Default.Assessment,
                             onClick = onNavigateToReports
+                        )
+                    }
+                    item {
+                        QuickActionCard(
+                            title = "Updates",
+                            icon = Icons.Default.SystemUpdate,
+                            onClick = onNavigateToUpdates
                         )
                     }
                     item {
@@ -297,5 +314,49 @@ private fun PhaseProgressRow(
             progress = progress,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+@Composable
+private fun CloudStatusCard(
+    connected: Boolean,
+    projectId: String,
+    projectCount: Int?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (connected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (connected) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                contentDescription = null,
+                tint = if (connected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (connected) "Firebase connected" else "Firebase not connected",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = buildString {
+                        append("Project: ")
+                        append(projectId)
+                        if (projectCount != null) append(" · $projectCount cloud projects")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

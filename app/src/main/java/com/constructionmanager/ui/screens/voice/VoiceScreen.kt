@@ -1,16 +1,25 @@
 package com.constructionmanager.ui.screens.voice
 
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -50,6 +59,8 @@ fun VoiceScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item { ScreeningRoleCard() }
+
             item {
                 Card {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -129,4 +140,72 @@ fun VoiceScreen(
             }
         }
     }
+}
+
+/** Lets the user grant Caroline the system call-screening role so it can answer calls first. */
+@Composable
+private fun ScreeningRoleCard() {
+    val context = LocalContext.current
+    var roleHeld by remember { mutableStateOf(isScreeningRoleHeld(context)) }
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { roleHeld = isScreeningRoleHeld(context) }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (roleHeld) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (roleHeld) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    if (roleHeld) "Caroline is screening your calls" else "Activate call screening",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (!roleHeld) {
+                Text(
+                    "Set Caroline as your call screening app so it can answer first, qualify leads, and " +
+                        "block spam before your phone rings.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = {
+                        val intent = screeningRoleRequestIntent(context)
+                        if (intent != null) {
+                            launcher.launch(intent)
+                        } else {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        }
+                    }
+                ) { Text("Set as call screening app") }
+            }
+        }
+    }
+}
+
+private fun isScreeningRoleHeld(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+    val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager ?: return false
+    return roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) &&
+        roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+}
+
+private fun screeningRoleRequestIntent(context: Context): Intent? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+    val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager ?: return null
+    if (!roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) return null
+    return roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
 }

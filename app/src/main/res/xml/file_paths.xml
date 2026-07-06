@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Update APKs downloaded by ApkInstaller live in the app-specific external files dir. -->
+    <external-files-path name="updates" path="updates/" />
+    <!-- Camera captures for Photo Documentation are written to cacheDir/images. -->
+    <cache-path name="images" path="images/" />
+</paths>

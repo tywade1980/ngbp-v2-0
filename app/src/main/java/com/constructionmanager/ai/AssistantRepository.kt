@@ -5,6 +5,7 @@ import com.constructionmanager.data.network.wade.AddMemoryRequest
 import com.constructionmanager.data.network.wade.ChatRequest
 import com.constructionmanager.data.network.wade.EstimateRequest
 import com.constructionmanager.data.network.wade.MemoryMessage
+import com.constructionmanager.data.network.wade.ScreenRequest
 import com.constructionmanager.data.network.wade.SearchMemoryRequest
 import com.constructionmanager.data.network.wade.WadeBackendConfig
 import com.constructionmanager.data.network.wade.WadeServiceFactory
@@ -19,7 +20,7 @@ data class AssistantReply(
     val source: Source,
     val memoryContext: List<String> = emptyList()
 ) {
-    enum class Source { LIVE, OFFLINE }
+    enum class Source { LIVE, OFFLINE, AGENT, WEB }
 }
 
 data class CallScreeningResult(
@@ -40,9 +41,38 @@ data class CallScreeningResult(
 @Singleton
 class AssistantRepository @Inject constructor(
     private val services: WadeServiceFactory,
-    private val config: WadeBackendConfig
+    private val config: WadeBackendConfig,
+    private val agent: ConstructionAgent,
+    private val webSearch: WebSearchRepository
 ) {
     suspend fun chat(message: String, sessionId: String): AssistantReply = withContext(Dispatchers.IO) {
+        // 0) Agent control: if this is an actionable command, execute it on-device (works offline)
+        //    and report back. Conversational turns return null and fall through to the LLM.
+        runCatching { agent.tryHandle(message) }.getOrNull()?.let { outcome ->
+            // Record the action in long-term memory too (best-effort), so recall spans actions + chat.
+            if (config.remoteEnabled) {
+                runCatching {
+                    services.memory().add(
+                        AddMemoryRequest(
+                            messages = listOf(
+                                MemoryMessage("user", message),
+                                MemoryMessage("assistant", outcome.text)
+                            ),
+                            userId = config.userId
+                        )
+                    )
+                }
+            }
+            return@withContext AssistantReply(outcome.text, AssistantReply.Source.AGENT)
+        }
+
+        // 1) Explicit web lookups, when a search key is configured.
+        if (webSearch.isConfigured() && webSearch.isSearchQuery(message)) {
+            webSearch.search(message).getOrNull()?.let {
+                return@withContext AssistantReply(it, AssistantReply.Source.WEB)
+            }
+        }
+
         if (!config.remoteEnabled) {
             return@withContext AssistantReply(OfflineAssistant.reply(message), AssistantReply.Source.OFFLINE)
         }
@@ -115,6 +145,39 @@ class AssistantRepository @Inject constructor(
             if (!config.remoteEnabled) return@withContext Result.success(emptyList())
             runCatching { services.caroline().calls() }
         }
+
+    /**
+     * Asks the live Caroline receptionist how to handle an inbound call. Returns a result marked
+     * [CallScreeningResult.live] = false when the backend is disabled or unreachable, so the caller
+     * can fall back to its on-device heuristic.
+     */
+    suspend fun screenCall(callSid: String, number: String, name: String? = null): CallScreeningResult =
+        withContext(Dispatchers.IO) {
+            if (!config.remoteEnabled) {
+                return@withContext CallScreeningResult("local", "On-device heuristic", live = false)
+            }
+            try {
+                val decision = services.caroline()
+                    .screen(ScreenRequest(callSid = callSid, callerNumber = number, callerName = name))
+                CallScreeningResult(
+                    decision = decision.decision ?: "allow",
+                    reason = decision.reason ?: "",
+                    live = true
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Live call screening failed, falling back to heuristic", e)
+                CallScreeningResult("local", "Fallback after error: ${e.message}", live = false)
+            }
+        }
+
+    /** Best-effort connectivity probe for the orchestrator, used by the backend settings UI. */
+    suspend fun ping(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val health = services.orchestrator().health()
+            val status = health["status"]?.toString() ?: "ok"
+            "Orchestrator reachable ($status)"
+        }
+    }
 
     companion object {
         private const val TAG = "AssistantRepository"

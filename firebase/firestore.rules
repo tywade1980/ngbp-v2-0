@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// ConstructPro stores each user's data under users/{uid}/** (projects, materials,
+// workers, photos, the users/{uid} profile doc, etc.). These rules let a signed-in
+// user read/write only their own workspace, and deny everything else.
+//
+// Deploy with:  firebase deploy --only firestore:rules --project nextgenbuildpro
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A user owns everything beneath their own uid.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // -------------------------------------------------------------------------
+    // OPTIONAL — development only. The built-in "demo" login is a local session
+    // (no Firebase Auth), so it writes under users/demo_user_001/**. Uncommenting
+    // this lets the demo sync to the cloud WITHOUT authentication. Anyone could
+    // read/write that fixed path, so REMOVE it for production and use a real
+    // (email/password) account, which syncs under the rule above.
+    // -------------------------------------------------------------------------
+    // match /users/demo_user_001/{document=**} {
+    //   allow read, write: if true;
+    // }
+  }
+}

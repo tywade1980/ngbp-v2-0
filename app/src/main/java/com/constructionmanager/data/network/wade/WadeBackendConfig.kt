@@ -38,6 +38,11 @@ class WadeBackendConfig @Inject constructor(
         get() = prefs.getString(KEY_USER, DEFAULT_USER) ?: DEFAULT_USER
         set(value) = prefs.edit { putString(KEY_USER, value.trim()) }
 
+    /** Tavily API key for in-app web search (free tier). Empty = web search disabled. */
+    var webSearchApiKey: String
+        get() = prefs.getString(KEY_WEB_SEARCH, "") ?: ""
+        set(value) = prefs.edit { putString(KEY_WEB_SEARCH, value.trim()) }
+
     /** When false the app never reaches out and runs the on-device assistant only. */
     var remoteEnabled: Boolean
         get() = prefs.getBoolean(KEY_REMOTE, false)
@@ -68,5 +73,6 @@ class WadeBackendConfig @Inject constructor(
         private const val KEY_USER = "wade_user_id"
         private const val KEY_REMOTE = "wade_remote_enabled"
         private const val KEY_SCREEN = "wade_screening_threshold"
+        private const val KEY_WEB_SEARCH = "wade_web_search_key"
     }
 }

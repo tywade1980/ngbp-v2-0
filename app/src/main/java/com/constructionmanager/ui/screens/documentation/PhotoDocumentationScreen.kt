@@ -1,24 +1,41 @@
 package com.constructionmanager.ui.screens.documentation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.constructionmanager.domain.model.ConstructionPhase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotoDocumentationScreen(
     onNavigateBack: () -> Unit,
-    projectId: String
+    projectId: String,
+    viewModel: PhotoViewModel = hiltViewModel()
 ) {
     val photoCategories = remember {
         listOf(
@@ -30,9 +47,39 @@ fun PhotoDocumentationScreen(
             PhotoCategory.BEFORE_AFTER
         )
     }
-    
+
+    val context = LocalContext.current
+    val photos by viewModel.photos.collectAsState()
     var selectedCategory by remember { mutableStateOf<PhotoCategory?>(null) }
     var selectedPhase by remember { mutableStateOf<ConstructionPhase?>(null) }
+    var pendingCategory by remember { mutableStateOf(PhotoCategory.PROGRESS) }
+    var viewerPhoto by remember { mutableStateOf<PhotoViewModel.CapturedPhoto?>(null) }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        viewModel.onCaptureResult(success, projectId, pendingCategory)
+    }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        viewModel.onPicked(uri, projectId, pendingCategory)
+    }
+    val requestCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) takePicture.launch(viewModel.createCaptureUri(context))
+    }
+
+    fun capture(category: PhotoCategory) {
+        pendingCategory = category
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            takePicture.launch(viewModel.createCaptureUri(context))
+        } else {
+            requestCamera.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    fun pick(category: PhotoCategory) {
+        pendingCategory = category
+        pickImage.launch("image/*")
+    }
 
     Scaffold(
         topBar = {
@@ -44,10 +91,10 @@ fun PhotoDocumentationScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Open camera */ }) {
+                    IconButton(onClick = { capture(selectedCategory ?: PhotoCategory.PROGRESS) }) {
                         Icon(Icons.Default.CameraAlt, contentDescription = "Take Photo")
                     }
-                    IconButton(onClick = { /* Import from gallery */ }) {
+                    IconButton(onClick = { pick(selectedCategory ?: PhotoCategory.PROGRESS) }) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = "Import Photo")
                     }
                 }
@@ -55,7 +102,7 @@ fun PhotoDocumentationScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* Quick camera capture */ },
+                onClick = { capture(selectedCategory ?: PhotoCategory.PROGRESS) },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = "Quick Photo")
@@ -127,6 +174,22 @@ fun PhotoDocumentationScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Photos captured/picked in this session, with live upload status.
+                if (photos.isNotEmpty()) {
+                    item {
+                        Text(
+                            "This session (${photos.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    item {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(photos) { photo -> CapturedPhotoThumb(photo) { viewerPhoto = photo } }
+                        }
+                    }
+                }
+
                 // Quick capture section
                 item {
                     Card(
@@ -156,7 +219,7 @@ fun PhotoDocumentationScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 FilledTonalButton(
-                                    onClick = { /* Daily progress photo */ },
+                                    onClick = { capture(PhotoCategory.PROGRESS) },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
@@ -167,9 +230,9 @@ fun PhotoDocumentationScreen(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Daily Progress")
                                 }
-                                
+
                                 FilledTonalButton(
-                                    onClick = { /* Safety documentation */ },
+                                    onClick = { capture(PhotoCategory.SAFETY) },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
@@ -198,9 +261,52 @@ fun PhotoDocumentationScreen(
                 items(getSamplePhotoEntries()) { photoEntry ->
                     PhotoDocumentationCard(
                         photoEntry = photoEntry,
-                        onClick = { /* View photo details */ }
+                        onClick = { /* Sample entries have no stored image */ }
                     )
                 }
+            }
+        }
+    }
+
+    viewerPhoto?.let { photo ->
+        Dialog(
+            onDismissRequest = { viewerPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { viewerPhoto = null }
+            ) {
+                AsyncImage(
+                    model = photo.url ?: photo.uri,
+                    contentDescription = photo.category.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.Center)
+                )
+                IconButton(
+                    onClick = { viewerPhoto = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+                Text(
+                    text = photo.category.name.replace("_", " ") + when (photo.status) {
+                        PhotoViewModel.UploadStatus.UPLOADED -> " • synced to Firebase"
+                        PhotoViewModel.UploadStatus.UPLOADING -> " • uploading…"
+                        PhotoViewModel.UploadStatus.FAILED -> " • upload failed"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp)
+                )
             }
         }
     }
@@ -327,6 +433,52 @@ private fun PhotoDocumentationCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CapturedPhotoThumb(photo: PhotoViewModel.CapturedPhoto, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(110.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+    ) {
+        AsyncImage(
+            model = photo.url ?: photo.uri,
+            contentDescription = photo.category.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize()
+        )
+        when (photo.status) {
+            PhotoViewModel.UploadStatus.UPLOADING ->
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(24.dp),
+                    strokeWidth = 2.dp
+                )
+
+            PhotoViewModel.UploadStatus.UPLOADED ->
+                Icon(
+                    imageVector = Icons.Default.CloudDone,
+                    contentDescription = "Uploaded to Firebase",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                )
+
+            PhotoViewModel.UploadStatus.FAILED ->
+                Icon(
+                    imageVector = Icons.Default.CloudOff,
+                    contentDescription = "Upload failed",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                )
         }
     }
 }
