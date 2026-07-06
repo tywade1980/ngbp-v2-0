@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Construction Manager</string>
-    <string name="welcome_message">Welcome to Construction Manager</string>
+    <string name="app_name">ConstructPro AI</string>
+    <string name="welcome_message">Welcome to ConstructPro AI</string>
+    <string name="assistant_title">Caroline — AI Assistant</string>
+    <string name="voice_title">Voice &amp; Call Screening</string>
     <string name="dashboard_title">Dashboard</string>
     <string name="projects_title">Projects</string>
     <string name="materials_title">Materials</string>

@@ -9,9 +9,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.constructionmanager.ui.screens.assistant.AssistantScreen
 import com.constructionmanager.ui.screens.auth.LoginScreen
 import com.constructionmanager.ui.screens.dashboard.DashboardScreen
 import com.constructionmanager.ui.screens.documentation.PhotoDocumentationScreen
+import com.constructionmanager.ui.screens.voice.VoiceScreen
 import com.constructionmanager.ui.screens.labor.LaborManagementScreen
 import com.constructionmanager.ui.screens.materials.MaterialsScreen
 import com.constructionmanager.ui.screens.projects.ProjectDetailsScreen
@@ -62,10 +64,34 @@ fun ConstructionManagerNavigation(
                 },
                 onNavigateToSettings = {
                     navController.navigate("settings")
+                },
+                onNavigateToAssistant = {
+                    navController.navigate("assistant")
+                },
+                onNavigateToVoice = {
+                    navController.navigate("voice")
                 }
             )
         }
-        
+
+        // AI Assistant (Caroline)
+        composable("assistant") {
+            AssistantScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Voice & Call Screening
+        composable("voice") {
+            VoiceScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
         // Projects
         composable("projects") {
             ProjectsScreen(
