@@ -32,6 +32,10 @@ class ConstructionAgentTest {
         val failed = ConstructionAgent.cloudSentence(Result.failure(IllegalStateException("PERMISSION_DENIED")))
         assertTrue(failed.contains("failed") && failed.contains("PERMISSION_DENIED"))
         val timedOut = ConstructionAgent.cloudSentence(null)
+        // what the real path returns on a timeout: runCatching inside CloudSync turns the cancellation into a failure
+        val viaRunCatching = ConstructionAgent.cloudSentence(Result.failure(kotlinx.coroutines.CancellationException("Timed out waiting for 10000 ms")))
+        assertTrue(viaRunCatching.contains("did not confirm"))
+        assertTrue(ConstructionAgent.workerSentence("Sam", "electrician", null, Result.failure(kotlinx.coroutines.CancellationException("t"))).contains("not confirmed"))
         assertTrue(timedOut.contains("did not confirm"))
         listOf(failed, timedOut).forEach { assertFalse(it.contains("synced")) }
     }

@@ -21,10 +21,7 @@ object LaborSamples {
     fun labelEntries(entries: List<LaborEntry>): List<LaborEntry> =
         entries.map { if (it.workerName.endsWith(MARK)) it else it.copy(workerName = it.workerName + MARK) }
 
-    /** Who tracked time is billed to: the chosen worker, else the first real one, else nobody (never a sample). */
-    fun workerForTrackedTime(workers: List<Worker>, selectedId: String?): Worker? {
-        val chosen = workers.firstOrNull { it.id == selectedId }
-        if (chosen != null && !isSample(chosen)) return chosen
-        return workers.firstOrNull { !isSample(it) }
-    }
+    /** Who tracked time is billed to: only the worker the user chose, and never a sample. Otherwise nobody (unassigned). */
+    fun workerForTrackedTime(workers: List<Worker>, selectedId: String?): Worker? =
+        workers.firstOrNull { it.id == selectedId }?.takeIf { !isSample(it) }
 }

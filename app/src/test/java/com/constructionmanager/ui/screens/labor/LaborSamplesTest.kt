@@ -26,11 +26,11 @@ class LaborSamplesTest {
     }
 
     @Test
-    fun `tracked time goes to the chosen real worker, else the first real one, else nobody`() {
+    fun `tracked time goes only to the worker chosen, never to a sample or a guess`() {
         val sample = LaborSamples.label(listOf(w("worker_001", "Smith"))).single()
         val real = w("cloud_7", "Wade")
-        assertEquals("cloud_7", LaborSamples.workerForTrackedTime(listOf(sample, real), null)?.id)
-        assertEquals("cloud_7", LaborSamples.workerForTrackedTime(listOf(sample, real), "worker_001")?.id)
-        assertNull(LaborSamples.workerForTrackedTime(listOf(sample), null))
+        assertEquals("cloud_7", LaborSamples.workerForTrackedTime(listOf(sample, real), "cloud_7")?.id)
+        assertNull(LaborSamples.workerForTrackedTime(listOf(sample, real), null))
+        assertNull(LaborSamples.workerForTrackedTime(listOf(sample, real), "worker_001"))
     }
 }

@@ -145,26 +145,36 @@ class AssistantViewModel @Inject constructor(
 
     /** Pair this phone with a one-time code the owner made in the Office. */
     fun pair(serverUrl: String, code: String, label: String) {
+        if (connector.isPaired) {
+            _uiState.update { it.copy(connectionNote = "This phone is already paired. Disconnect first, then pair again.") }
+            return
+        }
         val checked = CarolineEndpoint.normalize(serverUrl)
         if (checked is CarolineEndpoint.Checked.Refused) {
             _uiState.update { it.copy(connectionNote = checked.reason) }
             return
         }
-        connectorSettings.baseUrl = (checked as CarolineEndpoint.Checked.Ok).url
+        val previousUrl = connectorSettings.baseUrl
+        connectorSettings.baseUrl = (checked as CarolineEndpoint.Checked.Ok).url   // no token is held here (not paired)
         _uiState.update { it.copy(serverUrl = connectorSettings.baseUrl, isPairing = true, connectionNote = null) }
         viewModelScope.launch {
             val r = connector.pair(code, label, Build.MODEL, Build.VERSION.RELEASE, BuildConfig.VERSION_NAME)
+            if (r !is ConnectorResult.Ok) connectorSettings.baseUrl = previousUrl
             val note = when (r) {
                 is ConnectorResult.Ok -> "Paired as \"${r.value.label}\". Messages you type here now go to Caroline."
                 is ConnectorResult.Failed -> "Not paired: ${r.error.message}"
                 is ConnectorResult.Queued -> "Not paired."
             }
-            _uiState.update { it.copy(isPairing = false, paired = connector.isPaired, connectionNote = note) }
+            _uiState.update { it.copy(isPairing = false, paired = connector.isPaired, serverUrl = connectorSettings.baseUrl, connectionNote = note) }
         }
     }
 
     /** Unpair this phone (the token is revoked on the server when it can be reached). */
     fun disconnect() {
+        if (!connector.isPaired) {
+            _uiState.update { it.copy(paired = false, connectionNote = "This phone is not paired.") }
+            return
+        }
         viewModelScope.launch {
             val rep = connector.signOut()
             val note = buildString {

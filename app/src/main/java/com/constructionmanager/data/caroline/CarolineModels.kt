@@ -47,7 +47,8 @@ data class BriefingResponse(
 
 data class AssistTextRequest(
     @SerializedName("text") val text: String,
-    @SerializedName("client_msg_id") val clientMsgId: String
+    @SerializedName("client_msg_id") val clientMsgId: String,
+    @SerializedName("said_at") val saidAt: String? = null
 )
 
 data class AssistTextResponse(

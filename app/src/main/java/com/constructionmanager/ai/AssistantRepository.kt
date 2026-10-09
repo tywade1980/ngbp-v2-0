@@ -3,6 +3,7 @@ package com.constructionmanager.ai
 import com.constructionmanager.data.caroline.AssistTextResponse
 import com.constructionmanager.data.caroline.CallSummary
 import com.constructionmanager.data.caroline.CarolineConnector
+import com.constructionmanager.data.caroline.ConnectorError
 import com.constructionmanager.data.caroline.ConnectorResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -110,10 +111,17 @@ class AssistantRepository @Inject constructor(
                 "Not sent yet - no connection. It's saved on this phone and goes to Caroline, in order, as soon as the phone is back online.",
                 AssistantReply.Source.QUEUED
             )
-            is ConnectorResult.Failed -> AssistantReply(
-                OfflineAssistant.reply(message) + "\n\n_(Caroline was not reached: ${r.error.message})_",
-                AssistantReply.Source.OFFLINE
-            )
+            is ConnectorResult.Failed -> when (r.error) {
+                // the server answered and said no: no canned answer, just its reason
+                is ConnectorError.Forbidden, is ConnectorError.Http ->
+                    AssistantReply("Caroline's server did not take this message: ${r.error.message}", AssistantReply.Source.OFFLINE)
+                is ConnectorError.BadResponse ->
+                    AssistantReply("Caroline's server answered, but not in a way this app can read: ${r.error.message}", AssistantReply.Source.OFFLINE)
+                else -> AssistantReply(
+                    OfflineAssistant.reply(message) + "\n\n_(Caroline was not reached: ${r.error.message})_",
+                    AssistantReply.Source.OFFLINE
+                )
+            }
         }
     }
 }

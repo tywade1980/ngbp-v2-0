@@ -36,7 +36,10 @@ class CarolineConnector(
 ) {
     private val gson = Gson()
     private val json = "application/json; charset=utf-8".toMediaType()
+    // No interceptors from the shared client: its debug body logging would write the pairing code and this phone's
+    // token to logcat (review, Oct 8). Nothing the connector sends or receives is logged.
     private val client: OkHttpClient = baseClient.newBuilder()
+        .apply { interceptors().clear(); networkInterceptors().clear() }
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .writeTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
@@ -86,7 +89,7 @@ class CarolineConnector(
      */
     suspend fun sendText(text: String, clientMsgId: String = newId()): ConnectorResult<AssistTextResponse> {
         if (!isPaired) return ConnectorResult.Failed(ConnectorError.NotPaired())
-        val body = gson.toJson(AssistTextRequest(text, clientMsgId))
+        val body = gson.toJson(AssistTextRequest(text, clientMsgId, isoUtc(clock())))
         val r = exchange("POST", "assist/text", body, auth = true, retry = true, AssistTextResponse::class.java)
         if (r is ConnectorResult.Failed && r.error is ConnectorError.Network) {
             if (outbox.add(OutboxItem(clientMsgId, text, clock()))) return ConnectorResult.Queued(clientMsgId)
@@ -102,7 +105,7 @@ class CarolineConnector(
         var sent = 0
         val refused = mutableListOf<Pair<OutboxItem, ConnectorError>>()
         for (item in outbox.items()) {
-            val r = exchange("POST", "assist/text", gson.toJson(AssistTextRequest(item.text, item.clientMsgId)),
+            val r = exchange("POST", "assist/text", gson.toJson(AssistTextRequest(item.text, item.clientMsgId, isoUtc(item.queuedAtMillis))),
                 auth = true, retry = true, AssistTextResponse::class.java)
             when {
                 r is ConnectorResult.Ok -> { outbox.remove(item.clientMsgId); sent++ }
@@ -186,6 +189,9 @@ class CarolineConnector(
         }
         return ConnectorResult.Failed(last)
     }
+
+    /** When it was typed, so a message sent late from the outbox keeps its own time (server accepts up to 48 h). */
+    private fun isoUtc(millis: Long): String = java.time.Instant.ofEpochMilli(millis).toString()
 
     private fun resolve(path: String): HttpUrl? {
         val base = settings.baseUrl.toHttpUrlOrNull() ?: return null

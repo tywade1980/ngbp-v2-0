@@ -24,8 +24,11 @@ class SignOut(
 
     suspend fun run(): Report {
         val problems = mutableListOf<String>()
+        // a cancelled sign-out (screen closed) is not reported as a failure: it is rethrown
         val account = try {
             logoutAccount(); true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             problems += "account sign-out failed (${e.message ?: e.javaClass.simpleName})"; false
         }
@@ -33,6 +36,8 @@ class SignOut(
             val rep = unpairCaroline()
             if (!rep.serverRevoked && rep.serverMessage != null) problems += "Caroline's server was not told (${rep.serverMessage}); revoke this phone in the Office"
             rep.serverRevoked
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             problems += "unpairing failed (${e.message ?: e.javaClass.simpleName})"; false
         }

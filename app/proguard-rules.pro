@@ -50,3 +50,9 @@
 -keepclasseswithmembers class com.constructionmanager.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+# Caroline connector (review, Oct 8): Gson reads and writes these by reflection; R8 full mode would strip or null their
+# fields (pairing would send {} and read no token) and erase the outbox's List<OutboxItem> type.
+-keep class com.constructionmanager.data.caroline.** { *; }
+-keepattributes Signature, *Annotation*
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken

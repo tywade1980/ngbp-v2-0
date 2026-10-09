@@ -36,10 +36,17 @@ class AssistantReplyTest {
     }
 
     @Test
-    fun `a failure says Caroline was not reached and why`() {
+    fun `a refusal says the server did not take it - no canned answer, never 'not reached'`() {
         val r = AssistantRepository.replyFor(ConnectorResult.Failed(ConnectorError.Forbidden("a paired phone cannot use this route")), "hello")
+        assertEquals("Caroline's server did not take this message: a paired phone cannot use this route", r.text)
+        assertFalse(r.text.contains("not reached"))
+    }
+
+    @Test
+    fun `no network says not reached, and why`() {
+        val r = AssistantRepository.replyFor(ConnectorResult.Failed(ConnectorError.Network("Can't reach Caroline's server right now (ConnectException).")), "hello")
         assertEquals(AssistantReply.Source.OFFLINE, r.source)
-        assertTrue(r.text.contains("Caroline was not reached: a paired phone cannot use this route"))
+        assertTrue(r.text.contains("Caroline was not reached: Can't reach"))
     }
 
     @Test

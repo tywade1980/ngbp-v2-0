@@ -248,22 +248,30 @@ class ConstructionAgent @Inject constructor(
          */
         fun isCreateCommand(message: String): Boolean = CREATE_COMMAND.containsMatchIn(message.lowercase().trim())
 
+        /**
+         * CloudSync wraps each write in runCatching, which also catches the timeout's cancellation, so a write that ran
+         * out of time comes back as a failure. It may still land later (Firestore keeps offline writes), so it is read as
+         * "not confirmed" (null), never as "failed".
+         */
+        fun confirmedOrNot(result: Result<Unit>?): Result<Unit>? =
+            if (result?.exceptionOrNull() is kotlinx.coroutines.CancellationException) null else result
+
         /** What the cloud write did, in words: confirmed, failed (with why), or not confirmed in time. */
-        fun cloudSentence(result: Result<Unit>?): String = when {
-            result == null -> "The cloud copy (Firebase) did not confirm within ${CLOUD_TIMEOUT_MS / 1000} s, so it may not be there yet."
-            result?.isSuccess == true -> "Also copied to the cloud (Firebase)."
-            else -> "The cloud copy (Firebase) failed: ${result?.exceptionOrNull()?.message ?: "no reason given"}."
+        fun cloudSentence(raw: Result<Unit>?): String = when (val result = confirmedOrNot(raw)) {
+            null -> "The cloud copy (Firebase) did not confirm within ${CLOUD_TIMEOUT_MS / 1000} s, so it may not be there yet."
+            else -> if (result.isSuccess) "Also copied to the cloud (Firebase)."
+            else "The cloud copy (Firebase) failed: ${result.exceptionOrNull()?.message ?: "no reason given"}."
         }
 
-        fun workerSentence(name: String, trade: String, rate: String?, result: Result<Unit>?): String = when {
-            result != null && result.isSuccess ->
-                "✅ Added $name as a $trade" + (if (rate != null) " at $rate/hr" else "") + ". Open Labor → Workers to see the roster."
-            result == null ->
+        fun workerSentence(name: String, trade: String, rate: String?, raw: Result<Unit>?): String = when (val result = confirmedOrNot(raw)) {
+            null ->
                 "⚠️ $name is not confirmed as added: workers are kept only in the cloud (Firebase), and it did not answer within " +
                     "${CLOUD_TIMEOUT_MS / 1000} s. Check Labor → Workers before adding again."
-            else ->
+            else -> if (result.isSuccess)
+                "✅ Added $name as a $trade" + (if (rate != null) " at $rate/hr" else "") + ". Open Labor → Workers to see the roster."
+            else
                 "❌ $name was NOT added: workers are kept only in the cloud (Firebase), and that write failed " +
-                    "(${result?.exceptionOrNull()?.message ?: "no reason given"})."
+                    "(${result.exceptionOrNull()?.message ?: "no reason given"})."
         }
 
         private val CREATE_COMMAND = Regex(

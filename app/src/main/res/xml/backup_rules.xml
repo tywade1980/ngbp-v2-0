@@ -6,4 +6,6 @@
     <exclude domain="database" path="construction_manager_database-shm" />
     <!-- This phone's Caroline device token and unsent messages: never restored onto another phone. -->
     <exclude domain="sharedpref" path="caroline_connector.xml" />
+    <!-- The chat with Caroline (briefings name clients and numbers) and the Tavily key live here. -->
+    <exclude domain="sharedpref" path="construction_manager_prefs.xml" />
 </full-backup-content>

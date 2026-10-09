@@ -31,8 +31,8 @@ object CarolineEndpoint {
         if (lower.contains("://") && !lower.startsWith("https://")) {
             return Checked.Refused("Only https:// addresses are allowed.")
         }
-        var url = if (lower.startsWith("https://")) t else "https://$t"
-        val hostAndPath = url.removePrefix("https://").removePrefix("HTTPS://")
+        val hostAndPath = if (lower.startsWith("https://")) t.substring("https://".length) else t
+        var url = "https://$hostAndPath"
         val host = hostAndPath.substringBefore('/')
         if (host.isBlank() || host.contains(' ') || !host.contains('.')) {
             return Checked.Refused("That does not look like a server address: \"$t\".")

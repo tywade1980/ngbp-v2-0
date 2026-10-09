@@ -168,7 +168,6 @@ class CarolineConnectorTest {
     @Test
     fun `offline text goes to the outbox with its id, and the flush resends that same id`() = runBlocking<Unit> {
         settings.deviceToken = "cdt_secret"
-        val base = settings.baseUrl
         server.shutdown()                                   // nothing listens: connection refused
         val r = connector().sendText("Order the drywall", clientMsgId = "11111111-2222-3333-4444-555555555555")
         assertTrue(r is ConnectorResult.Queued)
@@ -184,7 +183,6 @@ class CarolineConnectorTest {
         assertEquals(0, rep.left)
         val body = JsonParser().parse(server.takeRequest().body.readUtf8()).asJsonObject
         assertEquals("11111111-2222-3333-4444-555555555555", body.get("client_msg_id").asString)
-        assertTrue(base.isNotEmpty())
     }
 
     @Test
@@ -234,11 +232,39 @@ class CarolineConnectorTest {
 
     @Test
     fun `an http base address is refused before anything is sent`() = runBlocking<Unit> {
+        val plain = MockWebServer().also { it.start() }      // a cleartext server that WOULD answer
+        try {
+            plain.enqueue(json(200, """{"text":"should never be read"}"""))
+            settings.deviceToken = "cdt_secret"
+            settings.baseUrl = plain.url("/api/").toString()
+            val r = connector().briefing()
+            assertTrue(r is ConnectorResult.Failed)
+            assertEquals("Only https addresses are allowed.", (r as ConnectorResult.Failed).error.message)
+            assertEquals(0, plain.requestCount)
+        } finally {
+            plain.shutdown()
+        }
+    }
+
+    @Test
+    fun `nothing the connector sends is logged - the shared client's interceptors are dropped`() {
+        val logged = mutableListOf<String>()
+        client = client.newBuilder().addInterceptor(okhttp3.logging.HttpLoggingInterceptor { logged += it }.apply {
+            level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+        }).build()
         settings.deviceToken = "cdt_secret"
-        settings.baseUrl = "http://" + server.hostName + ":" + server.port + "/api/"
-        val r = connector().briefing()
-        assertTrue(r is ConnectorResult.Failed)
-        assertEquals(0, server.requestCount)
+        server.enqueue(json(200, """{"text":"ok"}"""))
+        runBlocking { connector().briefing() }
+        assertTrue(logged.isEmpty())
+    }
+
+    @Test
+    fun `a text carries when it was typed`() = runBlocking<Unit> {
+        settings.deviceToken = "cdt_secret"
+        server.enqueue(json(200, """{"stored":true}"""))
+        connector().sendText("hi", clientMsgId = "11111111-2222-3333-4444-555555555555")
+        val body = JsonParser().parse(server.takeRequest().body.readUtf8()).asJsonObject
+        assertEquals("1970-01-01T00:00:01Z", body.get("said_at").asString)   // clock() = 1000 ms in these tests
     }
 
     @Test
