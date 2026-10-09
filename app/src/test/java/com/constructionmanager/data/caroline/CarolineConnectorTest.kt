@@ -135,7 +135,7 @@ class CarolineConnectorTest {
     fun `a 401 on a device route forgets the token and says not paired`() = runBlocking<Unit> {
         settings.deviceToken = "cdt_revoked"; settings.deviceId = "dev_0123456789abcdef"
         server.enqueue(json(401, """{"detail":"this phone is not paired (or was signed out)"}"""))
-        val r = connector().whoAmI()
+        val r = connector().briefing()
         assertTrue(r is ConnectorResult.Failed && r.error is ConnectorError.NotPaired)
         assertNull(settings.deviceToken)
         assertNull(settings.deviceId)

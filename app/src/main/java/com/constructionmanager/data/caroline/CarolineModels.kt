@@ -8,11 +8,6 @@ import com.google.gson.annotations.SerializedName
  * read as "not given", never as a made-up value.
  */
 
-data class HealthResponse(
-    @SerializedName("ok") val ok: Boolean? = null,
-    @SerializedName("now") val now: String? = null
-)
-
 data class PairDeviceInfo(
     @SerializedName("model") val model: String?,
     @SerializedName("android") val android: String?,
@@ -30,13 +25,6 @@ data class PairResponse(
     @SerializedName("token") val token: String? = null,
     @SerializedName("tenant") val tenant: String? = null,
     @SerializedName("label") val label: String? = null
-)
-
-data class DeviceSelf(
-    @SerializedName("device_id") val deviceId: String? = null,
-    @SerializedName("tenant") val tenant: String? = null,
-    @SerializedName("label") val label: String? = null,
-    @SerializedName("paired_at") val pairedAt: String? = null
 )
 
 /** One row of GET /api/calls (office_api.list_calls). */

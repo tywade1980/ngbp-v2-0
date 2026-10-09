@@ -47,10 +47,6 @@ class CarolineConnector(
 
     // ------------------------------------------------------------------ calls the app makes
 
-    /** GET health - no token needed; tells whether the server answers at all. */
-    suspend fun health(): ConnectorResult<HealthResponse> =
-        exchange("GET", "health", body = null, auth = false, retry = true, HealthResponse::class.java)
-
     /**
      * POST pair - trade the one-time code for this phone's token, and keep it. Not retried: the code works once, so a
      * resend after a lost answer would read "already used" (the message then says to make a new code).
@@ -68,10 +64,6 @@ class CarolineConnector(
         }
         return r
     }
-
-    /** GET devices/self - which device and business this phone is paired as. */
-    suspend fun whoAmI(): ConnectorResult<DeviceSelf> =
-        exchange("GET", "devices/self", null, auth = true, retry = true, DeviceSelf::class.java)
 
     /** GET calls - the calls Caroline handled (owner's business line). */
     suspend fun calls(limit: Int = 50): ConnectorResult<List<CallSummary>> {
