@@ -96,7 +96,7 @@ fun ConstructionManagerNavigation(
             )
         }
 
-        // Voice & Call Screening
+        // Calls Caroline handled (call screening was removed: Tyler, Oct 8 2026)
         composable("voice") {
             VoiceScreen(
                 onNavigateBack = {

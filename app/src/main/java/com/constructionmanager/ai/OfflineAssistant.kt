@@ -29,20 +29,20 @@ object OfflineAssistant {
                     "custom millwork) and suggest reorder points. Which project are we sourcing for?"
 
             containsAny(m, "call", "phone", "screen", "client", "lead") ->
-                "Call screening runs in the Voice tab. I can qualify inbound leads, block spam, and route urgent " +
-                    "client calls to you. Enable the screening role on the device to let me answer first."
+                "Calls Caroline handled on the business line are listed under Calls once this phone is paired. " +
+                    "This app does not screen or block calls on your phone."
 
             containsAny(m, "brief", "status", "update", "summary") ->
                 "Here's the shape of a briefing: active projects, budget vs. actuals, anything off-schedule, and " +
                     "today's priorities. Connect the backend and I'll generate it live from your project data."
 
             containsAny(m, "hi", "hello", "hey", "caroline") ->
-                "Hi Tyler — Caroline here. I can help with estimates, scheduling, materials, call screening, and " +
+                "Hi — Caroline here. I can help with estimates, scheduling, materials, your call record, and " +
                     "daily briefings. What are we working on?"
 
             else ->
-                "I've noted that. I can help most with estimates, scheduling, materials, briefings, and call " +
-                    "screening. Connect the Wade backend in settings for full reasoning and memory."
+                "I can help most with estimates, scheduling, materials, briefings and your call record. " +
+                    "Connect Caroline in settings for full reasoning and memory."
         }
         return "$body\n\n_(offline mode — connect the Wade backend for live answers)_"
     }

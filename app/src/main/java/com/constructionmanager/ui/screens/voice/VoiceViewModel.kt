@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class VoiceUiState(
-    val screeningThreshold: Int = 70,
     val remoteEnabled: Boolean = false,
     val isLoading: Boolean = false,
     val calls: List<CallRecord> = emptyList(),
@@ -29,16 +28,10 @@ class VoiceViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(
         VoiceUiState(
-            screeningThreshold = config.screeningThreshold,
             remoteEnabled = config.remoteEnabled
         )
     )
     val uiState: StateFlow<VoiceUiState> = _uiState.asStateFlow()
-
-    fun setThreshold(value: Int) {
-        config.screeningThreshold = value
-        _uiState.update { it.copy(screeningThreshold = config.screeningThreshold) }
-    }
 
     fun refreshCalls() {
         _uiState.update { it.copy(isLoading = true, error = null) }

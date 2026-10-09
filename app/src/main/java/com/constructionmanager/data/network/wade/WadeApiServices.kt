@@ -35,11 +35,8 @@ interface MemoryApi {
     suspend fun search(@Body request: SearchMemoryRequest): MemorySearchResponse
 }
 
-/** Caroline receptionist / call screening (telephony_voice_ai). */
+/** Caroline receptionist call records (telephony_voice_ai). */
 interface CarolineApi {
-    @POST("screen")
-    suspend fun screen(@Body request: ScreenRequest): ScreeningDecision
-
     @GET("calls")
     suspend fun calls(): List<CallRecord>
 }

@@ -5,7 +5,6 @@ import com.constructionmanager.data.network.wade.AddMemoryRequest
 import com.constructionmanager.data.network.wade.ChatRequest
 import com.constructionmanager.data.network.wade.EstimateRequest
 import com.constructionmanager.data.network.wade.MemoryMessage
-import com.constructionmanager.data.network.wade.ScreenRequest
 import com.constructionmanager.data.network.wade.SearchMemoryRequest
 import com.constructionmanager.data.network.wade.WadeBackendConfig
 import com.constructionmanager.data.network.wade.WadeServiceFactory
@@ -23,17 +22,11 @@ data class AssistantReply(
     enum class Source { LIVE, OFFLINE, AGENT, WEB }
 }
 
-data class CallScreeningResult(
-    val decision: String,
-    val reason: String,
-    val live: Boolean
-)
-
 /**
  * The hub that unifies the three Wade services behind one construction-app-facing API:
  *  - orchestrator /chat          → reasoning + persona
  *  - mem0 /search and /memories  → recall context, then persist the exchange
- *  - caroline /screen and /calls → telephony intelligence
+ *  - caroline /calls             → call records
  *
  * Every method degrades gracefully: if the backend is disabled or unreachable it falls
  * back to the on-device [OfflineAssistant] / heuristics so the app is always functional.
@@ -144,30 +137,6 @@ class AssistantRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             if (!config.remoteEnabled) return@withContext Result.success(emptyList())
             runCatching { services.caroline().calls() }
-        }
-
-    /**
-     * Asks the live Caroline receptionist how to handle an inbound call. Returns a result marked
-     * [CallScreeningResult.live] = false when the backend is disabled or unreachable, so the caller
-     * can fall back to its on-device heuristic.
-     */
-    suspend fun screenCall(callSid: String, number: String, name: String? = null): CallScreeningResult =
-        withContext(Dispatchers.IO) {
-            if (!config.remoteEnabled) {
-                return@withContext CallScreeningResult("local", "On-device heuristic", live = false)
-            }
-            try {
-                val decision = services.caroline()
-                    .screen(ScreenRequest(callSid = callSid, callerNumber = number, callerName = name))
-                CallScreeningResult(
-                    decision = decision.decision ?: "allow",
-                    reason = decision.reason ?: "",
-                    live = true
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Live call screening failed, falling back to heuristic", e)
-                CallScreeningResult("local", "Fallback after error: ${e.message}", live = false)
-            }
         }
 
     /** Best-effort connectivity probe for the orchestrator, used by the backend settings UI. */

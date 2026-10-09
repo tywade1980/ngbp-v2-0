@@ -71,18 +71,6 @@ data class MemorySearchResponse(
 
 /* ------------------------------ Caroline (calls) ------------------------ */
 
-data class ScreenRequest(
-    @SerializedName("call_sid") val callSid: String,
-    @SerializedName("caller_number") val callerNumber: String,
-    @SerializedName("caller_name") val callerName: String? = null
-)
-
-data class ScreeningDecision(
-    @SerializedName("call_sid") val callSid: String? = null,
-    @SerializedName("decision") val decision: String? = null, // allow|block|voicemail|transfer
-    @SerializedName("reason") val reason: String? = null
-)
-
 data class CallRecord(
     @SerializedName("call_sid") val callSid: String? = null,
     @SerializedName("caller_number") val callerNumber: String? = null,

@@ -11,7 +11,7 @@ import javax.inject.Singleton
  * The Wade ecosystem exposes three cooperating services (see the companion repos):
  *  - Orchestrator   (unified-agentic-ai-foundation) — chat, reasoning, WCC construction tools
  *  - Memory         (mem0)                           — persistent semantic memory
- *  - Caroline       (telephony_voice_ai)             — call screening + receptionist
+ *  - Caroline       (telephony_voice_ai)             — receptionist call records
  *
  * All endpoints are user-configurable at runtime so the same APK works against an
  * emulator loopback host, a LAN dev box, or a deployed gateway. When the backend is
@@ -48,11 +48,6 @@ class WadeBackendConfig @Inject constructor(
         get() = prefs.getBoolean(KEY_REMOTE, false)
         set(value) = prefs.edit { putBoolean(KEY_REMOTE, value) }
 
-    /** On-device call-screening risk threshold (0 = block all, 100 = allow all). */
-    var screeningThreshold: Int
-        get() = prefs.getInt(KEY_SCREEN, 70)
-        set(value) = prefs.edit { putInt(KEY_SCREEN, value.coerceIn(0, 100)) }
-
     private fun normalize(url: String): String {
         val trimmed = url.trim()
         if (trimmed.isEmpty()) return trimmed
@@ -72,7 +67,6 @@ class WadeBackendConfig @Inject constructor(
         private const val KEY_CAROLINE = "wade_caroline_url"
         private const val KEY_USER = "wade_user_id"
         private const val KEY_REMOTE = "wade_remote_enabled"
-        private const val KEY_SCREEN = "wade_screening_threshold"
         private const val KEY_WEB_SEARCH = "wade_web_search_key"
     }
 }
