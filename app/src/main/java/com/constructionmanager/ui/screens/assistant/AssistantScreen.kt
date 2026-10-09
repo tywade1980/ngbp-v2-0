@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +45,7 @@ fun AssistantScreen(
                     Column {
                         Text("Caroline — AI Assistant")
                         Text(
-                            if (state.remoteEnabled) "Connected to Wade backend" else "On-device (offline) mode",
+                            if (state.paired) "Paired with Caroline" else "Not paired: on-device only",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -57,14 +58,14 @@ fun AssistantScreen(
                 },
                 actions = {
                     Icon(
-                        imageVector = if (state.remoteEnabled) Icons.Default.Cloud else Icons.Default.CloudOff,
+                        imageVector = if (state.paired) Icons.Default.Cloud else Icons.Default.CloudOff,
                         contentDescription = null,
-                        tint = if (state.remoteEnabled) MaterialTheme.colorScheme.primary
+                        tint = if (state.paired) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 4.dp)
                     )
                     IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Backend settings")
+                        Icon(Icons.Default.Settings, contentDescription = "Connect Caroline")
                     }
                 }
             )
@@ -111,18 +112,12 @@ fun AssistantScreen(
     }
 
     if (showSettings) {
-        BackendSettingsSheet(
-            remoteEnabled = state.remoteEnabled,
-            orchestratorUrl = state.orchestratorUrl,
-            memoryUrl = state.memoryUrl,
-            carolineUrl = state.carolineUrl,
-            userId = state.userId,
-            webSearchApiKey = state.webSearchApiKey,
+        ConnectCarolineSheet(
+            state = state,
             onDismiss = { showSettings = false },
-            onSave = { remote, orch, mem, caroline, user, webKey ->
-                viewModel.saveBackend(remote, orch, mem, caroline, user, webKey)
-                showSettings = false
-            }
+            onPair = viewModel::pair,
+            onDisconnect = viewModel::disconnect,
+            onSaveWebKey = viewModel::saveWebSearchKey
         )
     }
 }
@@ -181,7 +176,7 @@ private fun MessageBubble(msg: ChatMessage) {
         }
         if (!msg.fromUser) {
             Text(
-                text = msg.provenance ?: if (msg.live) "live • orchestrator + memory" else "on-device",
+                text = msg.provenance ?: "on-device",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, start = 4.dp)
@@ -222,24 +217,24 @@ private fun MessageComposer(
     }
 }
 
+
+/**
+ * Connect Caroline: the server address (https, default the VM), a one-time pairing code from the Office, and
+ * disconnect. The phone never holds the owner's Office password; it holds only its own revocable device token.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BackendSettingsSheet(
-    remoteEnabled: Boolean,
-    orchestratorUrl: String,
-    memoryUrl: String,
-    carolineUrl: String,
-    userId: String,
-    webSearchApiKey: String,
+private fun ConnectCarolineSheet(
+    state: AssistantUiState,
     onDismiss: () -> Unit,
-    onSave: (Boolean, String, String, String, String, String) -> Unit
+    onPair: (String, String, String) -> Unit,
+    onDisconnect: () -> Unit,
+    onSaveWebKey: (String) -> Unit
 ) {
-    var remote by remember { mutableStateOf(remoteEnabled) }
-    var orch by remember { mutableStateOf(orchestratorUrl) }
-    var mem by remember { mutableStateOf(memoryUrl) }
-    var caroline by remember { mutableStateOf(carolineUrl) }
-    var user by remember { mutableStateOf(userId) }
-    var webKey by remember { mutableStateOf(webSearchApiKey) }
+    var url by rememberSaveable { mutableStateOf(state.serverUrl) }
+    var code by rememberSaveable { mutableStateOf("") }
+    var label by rememberSaveable { mutableStateOf("") }
+    var webKey by rememberSaveable { mutableStateOf(state.webSearchApiKey) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -249,43 +244,45 @@ private fun BackendSettingsSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Wade Backend", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Use live backend", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Off = on-device assistant only",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(checked = remote, onCheckedChange = { remote = it })
+            Text("Connect Caroline", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                if (state.paired) "This phone is paired." else
+                    "In the Office, make a pairing code (it works once, for ten minutes) and type it here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = url, onValueChange = { url = it },
+                label = { Text("Caroline's server (https)") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (!state.paired) {
+                OutlinedTextField(
+                    value = code, onValueChange = { code = it },
+                    label = { Text("Pairing code, like ABCD-EFGH") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = label, onValueChange = { label = it },
+                    label = { Text("Name for this phone (optional)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    onClick = { onPair(url, code, label) },
+                    enabled = !state.isPairing && code.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (state.isPairing) "Pairing…" else "Pair this phone") }
+            } else {
+                OutlinedButton(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) { Text("Disconnect this phone") }
             }
-            OutlinedTextField(
-                value = orch, onValueChange = { orch = it },
-                label = { Text("Orchestrator URL") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = mem, onValueChange = { mem = it },
-                label = { Text("Memory (mem0) URL") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = caroline, onValueChange = { caroline = it },
-                label = { Text("Caroline (calls) URL") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = user, onValueChange = { user = it },
-                label = { Text("User ID") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            state.connectionNote?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
             Divider()
             Text("Web Search (Tavily)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Paste a free Tavily API key to let Caroline search the web (\"search …\", \"look up …\"). " +
-                    "Leave blank to use bundled knowledge only.",
+                "Paste a free Tavily API key to let the app search the web (\"search …\", \"look up …\"). " +
+                    "Leave blank to use bundled knowledge only. Web search does not go through Caroline.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -294,10 +291,7 @@ private fun BackendSettingsSheet(
                 label = { Text("Tavily API key") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Button(
-                onClick = { onSave(remote, orch, mem, caroline, user, webKey) },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Save") }
+            Button(onClick = { onSaveWebKey(webKey) }, modifier = Modifier.fillMaxWidth()) { Text("Save web search key") }
         }
     }
 }

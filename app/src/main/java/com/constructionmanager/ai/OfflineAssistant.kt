@@ -3,7 +3,7 @@ package com.constructionmanager.ai
 /**
  * A lightweight, fully on-device fallback "Caroline" assistant.
  *
- * It keeps the master app useful when the Wade backend is disabled or unreachable:
+ * It keeps the app useful when Caroline is not paired or not reachable:
  * it pattern-matches common construction-management intents and returns practical,
  * grounded guidance. Every reply is clearly marked so users know they are offline.
  */
@@ -18,7 +18,7 @@ object OfflineAssistant {
             containsAny(m, "estimate", "quote", "bid", "cost", "price") ->
                 "For a quick estimate I normally pull the WCC pricebook and RSMeans regional pricing. " +
                     "Give me the project type (kitchen remodel, deck, framing, etc.), rough square footage, " +
-                    "and finish level, and I'll draft line items. Connect the Wade backend in settings to run the live estimator."
+                    "and finish level, and I'll give ballpark line items on this phone. No live estimator is connected to this app yet."
 
             containsAny(m, "schedule", "timeline", "deadline", "when") ->
                 "I can sequence the standard phases — pre-construction, demolition, rough-in, inspections, " +
@@ -34,7 +34,7 @@ object OfflineAssistant {
 
             containsAny(m, "brief", "status", "update", "summary") ->
                 "Here's the shape of a briefing: active projects, budget vs. actuals, anything off-schedule, and " +
-                    "today's priorities. Connect the backend and I'll generate it live from your project data."
+                    "today's priorities. Once this phone is paired, tap Daily briefing for the real one from Caroline's record."
 
             containsAny(m, "hi", "hello", "hey", "caroline") ->
                 "Hi — Caroline here. I can help with estimates, scheduling, materials, your call record, and " +
@@ -44,7 +44,7 @@ object OfflineAssistant {
                 "I can help most with estimates, scheduling, materials, briefings and your call record. " +
                     "Connect Caroline in settings for full reasoning and memory."
         }
-        return "$body\n\n_(offline mode — connect the Wade backend for live answers)_"
+        return "$body\n\n_(answered on this phone)_"
     }
 
     private fun containsAny(haystack: String, vararg needles: String): Boolean =

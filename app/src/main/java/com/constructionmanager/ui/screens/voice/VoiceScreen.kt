@@ -1,6 +1,7 @@
 package com.constructionmanager.ui.screens.voice
 
 import androidx.compose.foundation.layout.*
+import com.constructionmanager.data.caroline.serverTimeToLocal
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -62,12 +63,12 @@ fun VoiceScreen(
                 item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             }
 
-            if (!state.remoteEnabled) {
+            if (!state.paired) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Text(
-                            "Live call records come from the Caroline receptionist service. Enable the Wade " +
-                                "backend in the Assistant tab to see qualified leads and transcripts here.",
+                            "This list is the record of calls Caroline handled on the business line. Pair this " +
+                                "phone first: Ask Caroline → settings → Connect Caroline.",
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -82,18 +83,19 @@ fun VoiceScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                call.callerName ?: call.callerNumber ?: "Unknown caller",
+                                call.callerName?.takeIf { it.isNotBlank() } ?: call.partyNumber ?: "Number not on record",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Medium
                             )
-                            call.intent?.let {
-                                Text("Intent: $it", style = MaterialTheme.typography.bodySmall)
-                            }
-                            call.transcript?.let {
+                            Text(
+                                listOfNotNull(call.direction, serverTimeToLocal(call.startedAt)).joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            call.summary?.takeIf { it.isNotBlank() }?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                             }
                         }
-                        call.status?.let { AssistChip(onClick = {}, label = { Text(it) }) }
+                        call.outcome?.let { AssistChip(onClick = {}, label = { Text(it) }) }
                     }
                 }
             }

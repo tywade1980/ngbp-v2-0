@@ -1,6 +1,6 @@
 package com.constructionmanager.ai
 
-import com.constructionmanager.data.network.wade.WadeBackendConfig
+import com.constructionmanager.data.settings.WebSearchSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,13 +21,13 @@ import javax.inject.Singleton
  */
 @Singleton
 class WebSearchRepository @Inject constructor(
-    private val config: WadeBackendConfig
+    private val settings: WebSearchSettings
 ) {
     private val client = OkHttpClient.Builder()
         .callTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    fun isConfigured(): Boolean = config.webSearchApiKey.isNotBlank()
+    fun isConfigured(): Boolean = settings.apiKey.isNotBlank()
 
     /** Heuristic: does this message look like an explicit web lookup? */
     fun isSearchQuery(message: String): Boolean {
@@ -38,7 +38,7 @@ class WebSearchRepository @Inject constructor(
     }
 
     suspend fun search(query: String): Result<String> = withContext(Dispatchers.IO) {
-        val key = config.webSearchApiKey
+        val key = settings.apiKey
         if (key.isBlank()) {
             return@withContext Result.failure(IllegalStateException("No web search key configured"))
         }

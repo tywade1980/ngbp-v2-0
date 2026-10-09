@@ -1,13 +1,9 @@
 package com.constructionmanager.ai
 
-import android.util.Log
-import com.constructionmanager.data.network.wade.AddMemoryRequest
-import com.constructionmanager.data.network.wade.ChatRequest
-import com.constructionmanager.data.network.wade.EstimateRequest
-import com.constructionmanager.data.network.wade.MemoryMessage
-import com.constructionmanager.data.network.wade.SearchMemoryRequest
-import com.constructionmanager.data.network.wade.WadeBackendConfig
-import com.constructionmanager.data.network.wade.WadeServiceFactory
+import com.constructionmanager.data.caroline.AssistTextResponse
+import com.constructionmanager.data.caroline.CallSummary
+import com.constructionmanager.data.caroline.CarolineConnector
+import com.constructionmanager.data.caroline.ConnectorResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -16,139 +12,108 @@ import javax.inject.Singleton
 /** A single assistant turn, with provenance so the UI can show how it was produced. */
 data class AssistantReply(
     val text: String,
-    val source: Source,
-    val memoryContext: List<String> = emptyList()
+    val source: Source
 ) {
-    enum class Source { LIVE, OFFLINE, AGENT, WEB }
+    enum class Source {
+        /** Caroline answered from the server. */
+        CAROLINE,
+        /** The message reached Caroline's record; she did not answer in the app (see [AssistantRepository.replyFor]). */
+        DELIVERED,
+        /** Not sent yet: in the outbox until the phone is back online. */
+        QUEUED,
+        /** The on-device helper answered; Caroline was not reached. */
+        OFFLINE,
+        /** An on-device action ran (a project, material or worker). */
+        AGENT,
+        WEB
+    }
 }
 
 /**
- * The hub that unifies the three Wade services behind one construction-app-facing API:
- *  - orchestrator /chat          → reasoning + persona
- *  - mem0 /search and /memories  → recall context, then persist the exchange
- *  - caroline /calls             → call records
- *
- * Every method degrades gracefully: if the backend is disabled or unreachable it falls
- * back to the on-device [OfflineAssistant] / heuristics so the app is always functional.
+ * What the Assistant and Calls screens ask for. Everything that goes to Caroline goes through [CarolineConnector];
+ * nothing here talks HTTP itself. On-device actions and web search stay on the phone.
  */
 @Singleton
 class AssistantRepository @Inject constructor(
-    private val services: WadeServiceFactory,
-    private val config: WadeBackendConfig,
+    private val connector: CarolineConnector,
     private val agent: ConstructionAgent,
     private val webSearch: WebSearchRepository
 ) {
-    suspend fun chat(message: String, sessionId: String): AssistantReply = withContext(Dispatchers.IO) {
-        // 0) Agent control: if this is an actionable command, execute it on-device (works offline)
-        //    and report back. Conversational turns return null and fall through to the LLM.
-        runCatching { agent.tryHandle(message) }.getOrNull()?.let { outcome ->
-            // Record the action in long-term memory too (best-effort), so recall spans actions + chat.
-            if (config.remoteEnabled) {
-                runCatching {
-                    services.memory().add(
-                        AddMemoryRequest(
-                            messages = listOf(
-                                MemoryMessage("user", message),
-                                MemoryMessage("assistant", outcome.text)
-                            ),
-                            userId = config.userId
-                        )
-                    )
-                }
-            }
-            return@withContext AssistantReply(outcome.text, AssistantReply.Source.AGENT)
+    suspend fun chat(message: String): AssistantReply = withContext(Dispatchers.IO) {
+        // 0) An explicit on-device command (create a project, add a material...) runs here and reports what happened.
+        val action = try {
+            agent.tryHandle(message)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return@withContext AssistantReply(
+                "That didn't finish on this phone (${e.message ?: e.javaClass.simpleName}). Check the list before trying again.",
+                AssistantReply.Source.AGENT
+            )
         }
+        action?.let { return@withContext AssistantReply(it.text, AssistantReply.Source.AGENT) }
 
         // 1) Explicit web lookups, when a search key is configured.
         if (webSearch.isConfigured() && webSearch.isSearchQuery(message)) {
-            webSearch.search(message).getOrNull()?.let {
-                return@withContext AssistantReply(it, AssistantReply.Source.WEB)
-            }
+            webSearch.search(message).getOrNull()?.let { return@withContext AssistantReply(it, AssistantReply.Source.WEB) }
         }
 
-        if (!config.remoteEnabled) {
-            return@withContext AssistantReply(OfflineAssistant.reply(message), AssistantReply.Source.OFFLINE)
-        }
-        try {
-            // 1) Recall relevant memory for context (best-effort).
-            val context = runCatching {
-                services.memory()
-                    .search(SearchMemoryRequest(query = message, userId = config.userId))
-                    .results.orEmpty().mapNotNull { it.memory }
-            }.getOrDefault(emptyList())
-
-            // 2) Ask the orchestrator.
-            val response = services.orchestrator()
-                .chat(ChatRequest(message = message, sessionId = sessionId))
-            val text = response.response?.takeIf { it.isNotBlank() }
-                ?: "I didn't get a response from the orchestrator."
-
-            // 3) Persist the exchange to long-term memory (best-effort).
-            runCatching {
-                services.memory().add(
-                    AddMemoryRequest(
-                        messages = listOf(
-                            MemoryMessage("user", message),
-                            MemoryMessage("assistant", text)
-                        ),
-                        userId = config.userId
-                    )
-                )
-            }
-
-            AssistantReply(text, AssistantReply.Source.LIVE, context)
-        } catch (e: Exception) {
-            Log.w(TAG, "Live chat failed, using offline assistant", e)
-            AssistantReply(
-                OfflineAssistant.reply(message) +
-                    "\n\n_(couldn't reach the orchestrator at ${config.orchestratorUrl})_",
+        // 2) To Caroline.
+        if (!connector.isPaired) {
+            return@withContext AssistantReply(
+                OfflineAssistant.reply(message) + "\n\n_(Caroline was not reached: this phone is not paired. Settings → Connect Caroline.)_",
                 AssistantReply.Source.OFFLINE
             )
         }
+        replyFor(connector.sendText(message), message)
     }
 
-    suspend fun estimate(clientName: String, projectType: String, notes: String): Result<String> =
-        withContext(Dispatchers.IO) {
-            if (!config.remoteEnabled) {
-                return@withContext Result.success(
-                    OfflineAssistant.reply("estimate for $projectType")
-                )
-            }
-            runCatching {
-                val r = services.orchestrator()
-                    .estimate(EstimateRequest(clientName, projectType, notes))
-                buildString {
-                    append(r.summary ?: "Estimate generated.")
-                    r.estimateTotal?.let { append("\n\nTotal: $%,.2f".format(it)) }
-                }
-            }
-        }
-
-    suspend fun briefing(): Result<String> = withContext(Dispatchers.IO) {
-        if (!config.remoteEnabled) {
-            return@withContext Result.success(OfflineAssistant.reply("status briefing"))
-        }
-        runCatching {
-            services.orchestrator().briefing().briefing ?: "No briefing available."
-        }
+    suspend fun briefing(): Result<String> = when (val r = connector.briefing()) {
+        is ConnectorResult.Ok -> Result.success(r.value.text?.takeIf { it.isNotBlank() } ?: "The briefing came back empty.")
+        is ConnectorResult.Failed -> Result.failure(IllegalStateException(r.error.message))
+        is ConnectorResult.Queued -> Result.failure(IllegalStateException("not sent"))
     }
 
-    suspend fun recentCalls(): Result<List<com.constructionmanager.data.network.wade.CallRecord>> =
-        withContext(Dispatchers.IO) {
-            if (!config.remoteEnabled) return@withContext Result.success(emptyList())
-            runCatching { services.caroline().calls() }
-        }
+    suspend fun recentCalls(): Result<List<CallSummary>> = when (val r = connector.calls()) {
+        is ConnectorResult.Ok -> Result.success(r.value)
+        is ConnectorResult.Failed -> Result.failure(IllegalStateException(r.error.message))
+        is ConnectorResult.Queued -> Result.failure(IllegalStateException("not sent"))
+    }
 
-    /** Best-effort connectivity probe for the orchestrator, used by the backend settings UI. */
-    suspend fun ping(): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            val health = services.orchestrator().health()
-            val status = health["status"]?.toString() ?: "ok"
-            "Orchestrator reachable ($status)"
-        }
+    /** Sends what the outbox holds; returns a sentence for the screen, or null when there was nothing to send. */
+    suspend fun flushOutbox(): String? {
+        val rep = connector.flushOutbox()
+        if (rep.sent == 0 && rep.refused.isEmpty()) return null
+        return buildString {
+            if (rep.sent > 0) append("Sent ${rep.sent} message(s) that were waiting for a connection.")
+            rep.refused.forEach { (item, err) -> append(" Not accepted: \"${item.text.take(40)}\" - ${err.message}") }
+            if (rep.left > 0) append(" ${rep.left} still waiting.")
+        }.trim()
     }
 
     companion object {
-        private const val TAG = "AssistantRepository"
+        /** Turns the connector's answer into words that say exactly what happened - nothing more. */
+        fun replyFor(r: ConnectorResult<AssistTextResponse>, message: String): AssistantReply = when (r) {
+            is ConnectorResult.Ok -> {
+                val v = r.value
+                val reply = v.reply
+                when {
+                    v.answered == true && !reply.isNullOrBlank() -> AssistantReply(reply, AssistantReply.Source.CAROLINE)
+                    v.stored == true -> AssistantReply(
+                        (v.detail ?: "Saved to your thread with Caroline.") + (if (v.duplicate == true) " (It was already there.)" else ""),
+                        AssistantReply.Source.DELIVERED
+                    )
+                    else -> AssistantReply("Caroline's server answered but did not say the message was kept.", AssistantReply.Source.OFFLINE)
+                }
+            }
+            is ConnectorResult.Queued -> AssistantReply(
+                "Not sent yet - no connection. It's saved on this phone and goes to Caroline, in order, as soon as the phone is back online.",
+                AssistantReply.Source.QUEUED
+            )
+            is ConnectorResult.Failed -> AssistantReply(
+                OfflineAssistant.reply(message) + "\n\n_(Caroline was not reached: ${r.error.message})_",
+                AssistantReply.Source.OFFLINE
+            )
+        }
     }
 }

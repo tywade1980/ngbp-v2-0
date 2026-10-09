@@ -1,11 +1,17 @@
 package com.constructionmanager.ui.screens.assistant
 
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.BuildConfig
 import com.constructionmanager.ai.AssistantReply
 import com.constructionmanager.ai.AssistantRepository
 import com.constructionmanager.data.assistant.ChatHistoryStore
-import com.constructionmanager.data.network.wade.WadeBackendConfig
+import com.constructionmanager.data.caroline.CarolineConnector
+import com.constructionmanager.data.caroline.CarolineEndpoint
+import com.constructionmanager.data.caroline.ConnectorResult
+import com.constructionmanager.data.caroline.ConnectorSettings
+import com.constructionmanager.data.settings.WebSearchSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,72 +25,63 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val fromUser: Boolean,
-    val live: Boolean = false,
     val provenance: String? = null
 )
 
 data class AssistantUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
-            text = "Hi Tyler — Caroline here. I know construction practices and ballpark pricing, and I can " +
-                "take action. Try \"estimate drywall for 1,200 sq ft\", \"how much does an electrician cost?\", " +
-                "\"cost of a 2x4\", \"what's the construction phase sequence?\", or " +
-                "\"create a project called Maple Kitchen, budget \$48k\".",
-            fromUser = false
+            text = "Caroline here. Pair this phone (Settings → Connect Caroline) and what you type here goes onto your " +
+                "thread with me. On the phone itself I can also take actions: \"create a project called Maple Kitchen, " +
+                "budget \$48k\", or answer ballpark questions like \"estimate drywall for 1,200 sq ft\".",
+            fromUser = false,
+            provenance = "on-device"
         )
     ),
     val input: String = "",
     val isSending: Boolean = false,
-    // Backend config mirror for the in-screen settings sheet
-    val remoteEnabled: Boolean = false,
-    val orchestratorUrl: String = "",
-    val memoryUrl: String = "",
-    val carolineUrl: String = "",
-    val userId: String = "",
+    // Caroline connection, for the settings sheet
+    val serverUrl: String = CarolineEndpoint.DEFAULT_BASE_URL,
+    val paired: Boolean = false,
+    val connectionNote: String? = null,
+    val isPairing: Boolean = false,
     val webSearchApiKey: String = ""
 )
 
 @HiltViewModel
 class AssistantViewModel @Inject constructor(
     private val repository: AssistantRepository,
-    private val config: WadeBackendConfig,
+    private val connector: CarolineConnector,
+    private val connectorSettings: ConnectorSettings,
+    private val webSearchSettings: WebSearchSettings,
     private val chatHistoryStore: ChatHistoryStore
 ) : ViewModel() {
 
-    private val sessionId = UUID.randomUUID().toString()
     private val _uiState = MutableStateFlow(loadState())
     val uiState: StateFlow<AssistantUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch { repository.flushOutbox()?.let { note -> appendSystem(note) } }
+    }
 
     private fun loadState(): AssistantUiState {
         val persisted = chatHistoryStore.load()
         val messages = if (persisted.isEmpty()) {
             AssistantUiState().messages
         } else {
-            persisted.map {
-                ChatMessage(
-                    text = it.text,
-                    fromUser = it.fromUser,
-                    live = it.provenance?.startsWith("live") == true,
-                    provenance = it.provenance
-                )
-            }
+            persisted.map { ChatMessage(text = it.text, fromUser = it.fromUser, provenance = it.provenance) }
         }
         return AssistantUiState(
             messages = messages,
-            remoteEnabled = config.remoteEnabled,
-            orchestratorUrl = config.orchestratorUrl,
-            memoryUrl = config.memoryUrl,
-            carolineUrl = config.carolineUrl,
-            userId = config.userId,
-            webSearchApiKey = config.webSearchApiKey
+            serverUrl = connectorSettings.baseUrl,
+            paired = connector.isPaired,
+            webSearchApiKey = webSearchSettings.apiKey
         )
     }
 
     private fun persistHistory() {
         chatHistoryStore.save(
-            _uiState.value.messages.map {
-                ChatHistoryStore.StoredMessage(it.text, it.fromUser, it.provenance)
-            }
+            _uiState.value.messages.map { ChatHistoryStore.StoredMessage(it.text, it.fromUser, it.provenance) }
         )
     }
 
@@ -94,15 +91,16 @@ class AssistantViewModel @Inject constructor(
         val text = _uiState.value.input.trim()
         if (text.isEmpty() || _uiState.value.isSending) return
         _uiState.update {
-            it.copy(
-                messages = it.messages + ChatMessage(text = text, fromUser = true),
-                input = "",
-                isSending = true
-            )
+            it.copy(messages = it.messages + ChatMessage(text = text, fromUser = true), input = "", isSending = true)
         }
         viewModelScope.launch {
-            val reply = repository.chat(text, sessionId)
-            appendAssistant(reply)
+            try {
+                repository.flushOutbox()?.let { note -> appendSystem(note) }
+                appendAssistant(repository.chat(text))
+            } finally {
+                // never leave the composer locked (audit B3: a hung call used to drop every later message)
+                _uiState.update { it.copy(isSending = false, paired = connector.isPaired) }
+            }
         }
     }
 
@@ -114,61 +112,83 @@ class AssistantViewModel @Inject constructor(
     fun briefing() {
         if (_uiState.value.isSending) return
         _uiState.update {
-            it.copy(
-                messages = it.messages + ChatMessage(text = "Give me a project briefing.", fromUser = true),
-                isSending = true
-            )
+            it.copy(messages = it.messages + ChatMessage(text = "Give me my briefing.", fromUser = true), isSending = true)
         }
         viewModelScope.launch {
-            val result = repository.briefing()
-            val text = result.getOrElse { "Couldn't generate a briefing: ${it.message}" }
-            appendAssistant(AssistantReply(text, AssistantReply.Source.LIVE))
+            try {
+                val result = repository.briefing()
+                appendAssistant(
+                    result.fold(
+                        onSuccess = { AssistantReply(it, AssistantReply.Source.CAROLINE) },
+                        onFailure = { AssistantReply("No briefing: ${it.message}", AssistantReply.Source.OFFLINE) }
+                    )
+                )
+            } finally {
+                _uiState.update { it.copy(isSending = false, paired = connector.isPaired) }
+            }
         }
     }
 
     private fun appendAssistant(reply: AssistantReply) {
         _uiState.update {
             it.copy(
-                messages = it.messages + ChatMessage(
-                    text = reply.text,
-                    fromUser = false,
-                    live = reply.source == AssistantReply.Source.LIVE,
-                    provenance = when (reply.source) {
-                        AssistantReply.Source.LIVE -> "live • orchestrator + memory"
-                        AssistantReply.Source.AGENT -> "agent • action taken"
-                        AssistantReply.Source.OFFLINE -> "on-device"
-                        AssistantReply.Source.WEB -> "web • tavily"
-                    }
-                ),
-                isSending = false
+                messages = it.messages + ChatMessage(text = reply.text, fromUser = false, provenance = provenanceOf(reply.source))
             )
         }
         persistHistory()
     }
 
-    fun saveBackend(
-        remoteEnabled: Boolean,
-        orchestratorUrl: String,
-        memoryUrl: String,
-        carolineUrl: String,
-        userId: String,
-        webSearchApiKey: String
-    ) {
-        config.remoteEnabled = remoteEnabled
-        config.orchestratorUrl = orchestratorUrl
-        config.memoryUrl = memoryUrl
-        config.carolineUrl = carolineUrl
-        if (userId.isNotBlank()) config.userId = userId
-        config.webSearchApiKey = webSearchApiKey
-        _uiState.update {
-            it.copy(
-                remoteEnabled = config.remoteEnabled,
-                orchestratorUrl = config.orchestratorUrl,
-                memoryUrl = config.memoryUrl,
-                carolineUrl = config.carolineUrl,
-                userId = config.userId,
-                webSearchApiKey = config.webSearchApiKey
-            )
+    private fun appendSystem(text: String) {
+        _uiState.update { it.copy(messages = it.messages + ChatMessage(text = text, fromUser = false, provenance = "connection")) }
+        persistHistory()
+    }
+
+    /** Pair this phone with a one-time code the owner made in the Office. */
+    fun pair(serverUrl: String, code: String, label: String) {
+        val checked = CarolineEndpoint.normalize(serverUrl)
+        if (checked is CarolineEndpoint.Checked.Refused) {
+            _uiState.update { it.copy(connectionNote = checked.reason) }
+            return
+        }
+        connectorSettings.baseUrl = (checked as CarolineEndpoint.Checked.Ok).url
+        _uiState.update { it.copy(serverUrl = connectorSettings.baseUrl, isPairing = true, connectionNote = null) }
+        viewModelScope.launch {
+            val r = connector.pair(code, label, Build.MODEL, Build.VERSION.RELEASE, BuildConfig.VERSION_NAME)
+            val note = when (r) {
+                is ConnectorResult.Ok -> "Paired as \"${r.value.label}\". Messages you type here now go to Caroline."
+                is ConnectorResult.Failed -> "Not paired: ${r.error.message}"
+                is ConnectorResult.Queued -> "Not paired."
+            }
+            _uiState.update { it.copy(isPairing = false, paired = connector.isPaired, connectionNote = note) }
+        }
+    }
+
+    /** Unpair this phone (the token is revoked on the server when it can be reached). */
+    fun disconnect() {
+        viewModelScope.launch {
+            val rep = connector.signOut()
+            val note = buildString {
+                append(if (rep.serverRevoked) "Disconnected; the server revoked this phone." else
+                    "Disconnected on this phone. The server could not be told (${rep.serverMessage ?: "no answer"}); revoke it in the Office too.")
+                if (rep.droppedUnsent > 0) append(" ${rep.droppedUnsent} unsent message(s) were dropped.")
+            }
+            _uiState.update { it.copy(paired = connector.isPaired, connectionNote = note) }
+        }
+    }
+
+    fun saveWebSearchKey(key: String) {
+        webSearchSettings.apiKey = key
+        _uiState.update { it.copy(webSearchApiKey = webSearchSettings.apiKey) }
+    }
+
+    companion object {
+        fun provenanceOf(source: AssistantReply.Source): String = when (source) {
+            AssistantReply.Source.CAROLINE -> "Caroline"
+            AssistantReply.Source.DELIVERED -> "delivered to Caroline • no reply in the app yet"
+            AssistantReply.Source.QUEUED -> "waiting for a connection"
+            AssistantReply.Source.AGENT -> "on this phone • action"
+            AssistantReply.Source.OFFLINE -> "on-device • Caroline not reached"
+            AssistantReply.Source.WEB -> "web • tavily"
         }
     }
 }
