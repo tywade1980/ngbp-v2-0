@@ -71,6 +71,9 @@ fun ReportsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            state.error?.let { err ->
+                item { Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
             item {
                 // Summary Cards
                 Row(

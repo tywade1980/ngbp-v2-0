@@ -2,6 +2,7 @@ package com.constructionmanager.ui.screens.reports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.constructionmanager.domain.logic.Schedule
 import com.constructionmanager.domain.model.Material
 import com.constructionmanager.domain.model.Project
 import com.constructionmanager.domain.model.ProjectStatus
@@ -11,7 +12,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import java.math.BigDecimal
 import javax.inject.Inject
 
@@ -20,7 +25,9 @@ data class ReportsUiState(
     val totalProjects: Int = 0,
     val activeProjects: Int = 0,
     val totalBudget: String = "$0",
-    val onSchedule: String = "—"
+    val onSchedule: String = "—",
+    /** Set when the local data could not be read; shown instead of crashing (audit B0). */
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -37,28 +44,34 @@ class ReportsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            projectRepository.getAllProjects().collect { list ->
-                projects = list
-                recomputeSummary()
-            }
+            projectRepository.getAllProjects()
+                .catch { e -> _uiState.value = _uiState.value.copy(isLoading = false, error = "Couldn't read projects: ${e.message}") }
+                .collect { list ->
+                    projects = list
+                    recomputeSummary()
+                }
         }
         viewModelScope.launch {
-            materialRepository.getAllActiveMaterials().collect { list ->
-                materials = list
-            }
+            materialRepository.getAllActiveMaterials()
+                .catch { e -> _uiState.value = _uiState.value.copy(error = "Couldn't read materials: ${e.message}") }
+                .collect { list ->
+                    materials = list
+                }
         }
     }
 
     private fun recomputeSummary() {
         val active = projects.count { it.status == ProjectStatus.ACTIVE }
         val totalBudget = projects.fold(BigDecimal.ZERO) { acc, p -> acc + p.totalBudget }
-        val onTrack = projects.count { it.status == ProjectStatus.ACTIVE || it.status == ProjectStatus.COMPLETED }
+        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        val share = Schedule.onScheduleShare(projects.filter { it.status == ProjectStatus.ACTIVE }, today)
         _uiState.value = ReportsUiState(
             isLoading = false,
             totalProjects = projects.size,
             activeProjects = active,
             totalBudget = compactMoney(totalBudget),
-            onSchedule = if (projects.isEmpty()) "—" else "${onTrack * 100 / projects.size}%"
+            onSchedule = share?.let { "${(it * 100).toInt()}%" } ?: "—",
+            error = _uiState.value.error
         )
     }
 

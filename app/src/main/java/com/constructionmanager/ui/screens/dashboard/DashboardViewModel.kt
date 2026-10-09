@@ -1,5 +1,7 @@
 package com.constructionmanager.ui.screens.dashboard
 
+import com.constructionmanager.domain.logic.Schedule
+import kotlinx.datetime.todayIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.constructionmanager.data.cloud.CloudProjectRepository
@@ -82,13 +84,8 @@ class DashboardViewModel @Inject constructor(
                     .mapValues { it.value.size }
                 
                 // Calculate on-schedule percentage (simplified logic)
-                val onSchedulePercentage = if (activeProjects.isNotEmpty()) {
-                    activeProjects.count { project ->
-                        // Simple logic: if current date is before estimated end date
-                        kotlinx.datetime.Clock.System.now().toEpochMilliseconds() < 
-                        project.estimatedEndDate.toEpochDays() * 24 * 60 * 60 * 1000
-                    }.toDouble() / activeProjects.size
-                } else 0.0
+                val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+                val onSchedulePercentage = Schedule.onScheduleShare(activeProjects, today) ?: 0.0
                 
                 // Cloud (Firebase) status + a live Firestore read, best-effort.
                 val cloudCount = cloudProjectRepository.count().getOrNull()

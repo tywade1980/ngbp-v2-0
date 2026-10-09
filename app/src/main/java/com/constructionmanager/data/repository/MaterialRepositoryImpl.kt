@@ -1,6 +1,7 @@
 package com.constructionmanager.data.repository
 
 import com.constructionmanager.data.database.SeedData
+import com.constructionmanager.data.database.StoredTime
 import com.constructionmanager.data.database.dao.MaterialDao
 import com.constructionmanager.data.database.entity.MaterialEntity
 import com.constructionmanager.domain.model.Material
@@ -8,7 +9,6 @@ import com.constructionmanager.domain.model.MaterialCategory
 import com.constructionmanager.domain.repository.MaterialRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.math.BigDecimal
@@ -103,7 +103,7 @@ class MaterialRepositoryImpl @Inject constructor(
             description = description,
             specifications = specifications,
             isActive = isActive,
-            lastPriceUpdate = LocalDateTime.parse(lastPriceUpdate),
+            lastPriceUpdate = StoredTime.toLocalDateTime(lastPriceUpdate),
             regionalPricing = regionalPricing
         )
     }
