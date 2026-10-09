@@ -22,6 +22,11 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Firebase Web API key (audit B12): never in the source. From -PfirebaseApiKey=... or the FIREBASE_API_KEY
+        // environment variable (a CI secret). Empty = the app builds and runs with cloud features failing visibly.
+        val firebaseApiKey = (project.findProperty("firebaseApiKey") as String?) ?: System.getenv("FIREBASE_API_KEY") ?: ""
+        buildConfigField("String", "FIREBASE_API_KEY", "\"" + firebaseApiKey.replace("\"", "") + "\"")
         
         room {
             schemaDirectory("$projectDir/schemas")

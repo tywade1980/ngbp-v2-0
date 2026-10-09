@@ -13,10 +13,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.constructionmanager.domain.usecase.SignOut
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    private val signOut: SignOut,
     private val store: SettingsStore,
     private val authRepository: AuthRepository,
     private val projectRepository: ProjectRepository,
@@ -45,6 +47,14 @@ class SettingsViewModel @Inject constructor(
     fun setCurrency(value: String) = store.setCurrency(value)
     fun setEmailNotifications(value: Boolean) = store.setEmailNotifications(value)
     fun setSmsNotifications(value: Boolean) = store.setSmsNotifications(value)
+
+    /** Ends the session for real (audit B8), then [onDone] with what did not happen, if anything (null = all done). */
+    fun signOut(onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val r = signOut.run()
+            onDone(r.problems.takeIf { it.isNotEmpty() }?.joinToString("; "))
+        }
+    }
 
     fun saveProfile(firstName: String, lastName: String, company: String) {
         viewModelScope.launch {

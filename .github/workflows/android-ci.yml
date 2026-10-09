@@ -38,9 +38,13 @@ jobs:
 
       - name: Unit tests (JVM)
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
 
       - name: Upload debug APK
         if: success()

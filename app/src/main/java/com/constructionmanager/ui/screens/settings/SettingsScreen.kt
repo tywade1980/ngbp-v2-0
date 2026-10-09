@@ -86,7 +86,14 @@ fun SettingsScreen(
                 items = listOf(
                     SettingsItem.Navigation("Profile Settings", "Edit personal information", onClick = { showProfileDialog = true }),
                     SettingsItem.Navigation("Security", "Password and authentication", onClick = { showSecurityDialog = true }),
-                    SettingsItem.Action("Sign Out", "Log out of your account", onLogout)
+                    SettingsItem.Action("Sign Out", "Log out and unpair this phone from Caroline") {
+                        viewModel.signOut { problem ->
+                            if (problem != null) {
+                                android.widget.Toast.makeText(context, "Signed out, but: $problem", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            onLogout()
+                        }
+                    }
                 )
             )
         )

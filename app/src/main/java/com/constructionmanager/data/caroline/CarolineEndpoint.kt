@@ -18,7 +18,7 @@ object CarolineEndpoint {
     /**
      * "136-108-70-191.nip.io"            -> https://136-108-70-191.nip.io/api/
      * "https://example.com/api"          -> https://example.com/api/
-     * "http://anything"                  -> Refused (no cleartext)
+     * any http:// address              -> Refused (no cleartext)
      * ""                                 -> Refused
      */
     fun normalize(input: String): Checked {

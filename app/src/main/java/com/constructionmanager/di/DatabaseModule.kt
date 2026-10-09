@@ -26,7 +26,8 @@ object DatabaseModule {
             ConstructionDatabase::class.java,
             ConstructionDatabase.DATABASE_NAME
         )
-        .fallbackToDestructiveMigration()
+        // No destructive fallback (audit B15): a schema change without a written migration must fail loudly, never
+        // wipe the projects and materials on the phone. Version 1 today; each new version brings its Migration.
         .build()
     }
     
