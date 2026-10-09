@@ -15,6 +15,8 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlinx.datetime.toLocalDateTime
+import com.constructionmanager.ai.ConstructionAgent
+import kotlinx.coroutines.withTimeoutOrNull
 import java.math.BigDecimal
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.seconds
@@ -35,6 +37,8 @@ data class LaborManagementUiState(
     val monthlyLaborCost: Double = 0.0,
     val laborCostsByTrade: Map<String, Double> = emptyMap(),
     val hourlyRatesByTrade: Map<String, Double> = emptyMap(),
+    /** Shown at the top of the screen whenever example data is on it (audit B7). */
+    val sampleNotice: String? = null,
     val error: String? = null
 )
 
@@ -55,11 +59,11 @@ class LaborManagementViewModel @Inject constructor(
             
             try {
                 // Load mock data for demonstration
-                val mockWorkers = createMockWorkers()
+                val mockWorkers = LaborSamples.label(createMockWorkers())
                 // Cloud workers (persisted) take precedence; sample workers fill out the demo roster.
                 val cloudWorkers = cloudSync.pullWorkers().getOrDefault(emptyList())
                 val mergedWorkers = (cloudWorkers + mockWorkers).distinctBy { it.id }
-                val mockLaborEntries = createMockLaborEntries()
+                val mockLaborEntries = LaborSamples.labelEntries(createMockLaborEntries())
                 // Persisted entries (tracked time) take precedence, newest first.
                 val cloudEntries = cloudSync.pullLaborEntries().getOrDefault(emptyList())
                 val mergedEntries = (cloudEntries + mockLaborEntries)
@@ -79,7 +83,8 @@ class LaborManagementViewModel @Inject constructor(
                     weeklyLaborCost = 18060.0,
                     monthlyLaborCost = 72240.0,
                     laborCostsByTrade = mockCostsByTrade,
-                    hourlyRatesByTrade = mockHourlyRates
+                    hourlyRatesByTrade = mockHourlyRates,
+                    sampleNotice = LaborSamples.NOTICE
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -132,8 +137,7 @@ class LaborManagementViewModel @Inject constructor(
     private fun logTrackedTime(seconds: Int) {
         viewModelScope.launch {
             val state = _uiState.value
-            val worker = state.workers.firstOrNull { it.id == state.selectedWorkerId }
-                ?: state.workers.firstOrNull()
+            val worker = LaborSamples.workerForTrackedTime(state.workers, state.selectedWorkerId)
             val hours = seconds / 3600.0
             val rate = worker?.hourlyRate ?: BigDecimal.ZERO
             val overtimeRate = rate.multiply(BigDecimal("1.5"))
@@ -169,11 +173,14 @@ class LaborManagementViewModel @Inject constructor(
                 phase = ConstructionPhase.FRAMING,
                 status = LaborEntryStatus.PENDING
             )
-            cloudSync.pushLaborEntry(entry)
+            val saved = withTimeoutOrNull(ConstructionAgent.CLOUD_TIMEOUT_MS) { cloudSync.pushLaborEntry(entry) }
             _uiState.value = _uiState.value.copy(
                 recentLaborEntries = listOf(entry) + _uiState.value.recentLaborEntries,
                 todaysTotalHours = _uiState.value.todaysTotalHours + hours,
-                todaysTotalCost = _uiState.value.todaysTotalCost + cost.toDouble()
+                todaysTotalCost = _uiState.value.todaysTotalCost + cost.toDouble(),
+                // tracked time lives only in the cloud: say so when that write did not confirm (audit B3)
+                error = if (saved?.isSuccess == true) _uiState.value.error else
+                    "Tracked time is shown here but NOT saved: " + ConstructionAgent.cloudSentence(saved)
             )
         }
     }

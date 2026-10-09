@@ -94,6 +94,22 @@ fun LaborManagementScreen(
                 }
             }
 
+            uiState.sampleNotice?.let { notice ->
+                Text(
+                    notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+            uiState.error?.let { err ->
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                )
+            }
             when (selectedTab) {
                 0 -> TimeTrackingTab(uiState, viewModel)
                 1 -> WorkersTab(uiState, viewModel)

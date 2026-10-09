@@ -257,7 +257,14 @@ fun PhotoDocumentationScreen(
                     )
                 }
                 
-                // Sample photo entries
+                // Sample photo entries, labelled (audit B7): they are examples, not this job's photos
+                item {
+                    Text(
+                        "Examples below - not your photos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 items(getSamplePhotoEntries()) { photoEntry ->
                     PhotoDocumentationCard(
                         photoEntry = photoEntry,

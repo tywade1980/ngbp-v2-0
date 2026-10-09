@@ -16,6 +16,7 @@ import com.constructionmanager.domain.repository.ProjectRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
@@ -60,7 +61,7 @@ class ConstructionAgent @Inject constructor(
         }
     }
 
-    private fun isCreate(m: String) = CREATE_VERBS.any { m.contains(it) }
+    private fun isCreate(m: String) = isCreateCommand(m)
     private fun mentionsWorker(m: String) =
         listOf("worker", "laborer", "employee", "crew member", "tradesman").any { m.contains(it) }
     private fun mentionsList(m: String) =
@@ -92,7 +93,7 @@ class ConstructionAgent @Inject constructor(
             updatedAt = now
         )
         projectRepository.insertProject(project)
-        cloudSync.pushProject(project)
+        val cloud = withTimeoutOrNull(CLOUD_TIMEOUT_MS) { cloudSync.pushProject(project) }
 
         val details = buildString {
             append("✅ Created project \"$name\"")
@@ -100,7 +101,8 @@ class ConstructionAgent @Inject constructor(
             append(" (${type.name.replace("_", " ").lowercase()}")
             if (budget > BigDecimal.ZERO) append(", budget ${money(budget)}")
             append(").")
-            append(" It's in your Projects list and synced to Firebase (nextgenbuildpro).")
+            append(" It's in your Projects list on this phone. ")
+            append(cloudSentence(cloud))
         }
         return Outcome(details)
     }
@@ -124,11 +126,11 @@ class ConstructionAgent @Inject constructor(
             lastPriceUpdate = now
         )
         materialRepository.insertMaterial(material)
-        cloudSync.pushMaterial(material)
+        val cloud = withTimeoutOrNull(CLOUD_TIMEOUT_MS) { cloudSync.pushMaterial(material) }
         return Outcome(
             "✅ Added \"$name\" (${category.name.lowercase()}" +
                 (if (price > BigDecimal.ZERO) " at ${money(price)}" else "") +
-                ") to the materials catalog and synced it to Firebase."
+                ") to the materials catalog on this phone. " + cloudSentence(cloud)
         )
     }
 
@@ -149,12 +151,9 @@ class ConstructionAgent @Inject constructor(
             hourlyRate = rate,
             hireDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
         )
-        cloudSync.pushWorker(worker)
-        return Outcome(
-            "✅ Added $name as a ${trade.name.replace("_", " ").lowercase()}" +
-                (if (rate > BigDecimal.ZERO) " at ${money(rate)}/hr" else "") +
-                " and synced to Firebase. Open Labor → Workers to see the roster."
-        )
+        // Workers have no table on the phone: the cloud write IS the record, so its result decides what is said.
+        val cloud = withTimeoutOrNull(CLOUD_TIMEOUT_MS) { cloudSync.pushWorker(worker) }
+        return Outcome(workerSentence(name, trade.name.replace("_", " ").lowercase(), if (rate > BigDecimal.ZERO) money(rate) else null, cloud))
     }
 
     private suspend fun listProjects(): Outcome {
@@ -238,11 +237,42 @@ class ConstructionAgent @Inject constructor(
             w.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
         }
 
-    private companion object {
-        val CREATE_VERBS = listOf("create", "add", "new", "make", "start", "set up", "hire", "register")
-        val QUOTED = Regex("\"([^\"]+)\"|'([^']+)'")
-        val NAMED = Regex("""(?:called|named|titled)\s+(.+?)(?:\s+for\b|\s+with\b|\s+budget\b|\s+at\b|[.,!?]|$)""", RegexOption.IGNORE_CASE)
-        val FOR_CLIENT = Regex("""(?:for (?:client|the)?\s*|client\s+)(?:the\s+)?([A-Za-z][\w'.\- ]+?)(?:\s+budget\b|\s+with\b|\s+at\b|[.,!?]|$)""", RegexOption.IGNORE_CASE)
-        val MONEY = Regex("""\$?\s?([0-9][0-9,]*(?:\.[0-9]+)?)\s?(k|m|thousand|million)?""", RegexOption.IGNORE_CASE)
+    companion object {
+        /** How long a cloud write may take before the answer says it did not confirm (offline it would wait forever: B3). */
+        const val CLOUD_TIMEOUT_MS = 10_000L
+
+        /**
+         * A create command starts the message (after an optional "Caroline," / "please" / "can you"). Audit B4: the old
+         * substring test made "what's the address of the project" ("add" in "address"), "any news on the project" and
+         * "what's the start date" create a $0 "New Project".
+         */
+        fun isCreateCommand(message: String): Boolean = CREATE_COMMAND.containsMatchIn(message.lowercase().trim())
+
+        /** What the cloud write did, in words: confirmed, failed (with why), or not confirmed in time. */
+        fun cloudSentence(result: Result<Unit>?): String = when {
+            result == null -> "The cloud copy (Firebase) did not confirm within ${CLOUD_TIMEOUT_MS / 1000} s, so it may not be there yet."
+            result?.isSuccess == true -> "Also copied to the cloud (Firebase)."
+            else -> "The cloud copy (Firebase) failed: ${result?.exceptionOrNull()?.message ?: "no reason given"}."
+        }
+
+        fun workerSentence(name: String, trade: String, rate: String?, result: Result<Unit>?): String = when {
+            result != null && result.isSuccess ->
+                "✅ Added $name as a $trade" + (if (rate != null) " at $rate/hr" else "") + ". Open Labor → Workers to see the roster."
+            result == null ->
+                "⚠️ $name is not confirmed as added: workers are kept only in the cloud (Firebase), and it did not answer within " +
+                    "${CLOUD_TIMEOUT_MS / 1000} s. Check Labor → Workers before adding again."
+            else ->
+                "❌ $name was NOT added: workers are kept only in the cloud (Firebase), and that write failed " +
+                    "(${result?.exceptionOrNull()?.message ?: "no reason given"})."
+        }
+
+        private val CREATE_COMMAND = Regex(
+            """^(?:(?:hey|ok|okay)\s+)?(?:caroline[,:]?\s+)?(?:please\s+|can you\s+|could you\s+|would you\s+|go ahead and\s+|i need you to\s+)?""" +
+                """(?:create|add|make|start|set up|hire|register|new)\b"""
+        )
+        private val QUOTED = Regex("\"([^\"]+)\"|'([^']+)'")
+        private val NAMED = Regex("""(?:called|named|titled)\s+(.+?)(?:\s+for\b|\s+with\b|\s+budget\b|\s+at\b|[.,!?]|$)""", RegexOption.IGNORE_CASE)
+        private val FOR_CLIENT = Regex("""(?:for (?:client|the)?\s*|client\s+)(?:the\s+)?([A-Za-z][\w'.\- ]+?)(?:\s+budget\b|\s+with\b|\s+at\b|[.,!?]|$)""", RegexOption.IGNORE_CASE)
+        private val MONEY = Regex("""\$?\s?([0-9][0-9,]*(?:\.[0-9]+)?)\s?(k|m|thousand|million)?""", RegexOption.IGNORE_CASE)
     }
 }
