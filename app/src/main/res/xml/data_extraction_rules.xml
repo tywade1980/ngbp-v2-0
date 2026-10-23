@@ -7,6 +7,7 @@
         <exclude domain="database" path="construction_manager_database-shm" />
         <!-- This phone's Caroline device token and unsent messages -->
         <exclude domain="sharedpref" path="caroline_connector.xml" />
+    <exclude domain="sharedpref" path="subscriber_onboarding.xml" />
         <exclude domain="sharedpref" path="construction_manager_prefs.xml" />
     </cloud-backup>
     <device-transfer>
@@ -14,6 +15,7 @@
         <exclude domain="database" path="construction_manager_database-wal" />
         <exclude domain="database" path="construction_manager_database-shm" />
         <exclude domain="sharedpref" path="caroline_connector.xml" />
+    <exclude domain="sharedpref" path="subscriber_onboarding.xml" />
         <exclude domain="sharedpref" path="construction_manager_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

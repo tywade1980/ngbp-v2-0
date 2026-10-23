@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -20,6 +21,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import com.constructionmanager.data.settings.SettingsStore
 import com.constructionmanager.ui.navigation.ConstructionManagerNavigation
+import com.constructionmanager.ui.screens.onboarding.OnboardingScreen
+import com.constructionmanager.ui.screens.onboarding.OnboardingViewModel
 import com.constructionmanager.ui.screens.auth.LoginViewModel
 import com.constructionmanager.ui.theme.ConstructionManagerTheme
 import com.constructionmanager.update.PlayUpdateManager
@@ -116,13 +119,27 @@ private fun MainContent(
         }
     }
 
+    // The subscriber front door comes first on a phone that has no other way in: not signed into the
+    // legacy account, not paired to any Caroline, and not dismissed by the owner ("I already have a
+    // Caroline"). A paired phone - Tyler's, or a subscriber whose launch landed - goes straight to the
+    // app proper; pairing counts as being in, no legacy sign-in required of a subscriber.
+    val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+    val onboardingState by onboardingViewModel.uiState.collectAsState()
+    val showOnboarding = !loginUiState.isAuthenticated && !onboardingState.paired && !onboardingState.dismissed
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        ConstructionManagerNavigation(
-            modifier = Modifier.padding(innerPadding),
-            isAuthenticated = loginUiState.isAuthenticated
-        )
+        if (showOnboarding) {
+            Box(modifier = Modifier.padding(innerPadding)) {
+                OnboardingScreen(onboardingViewModel)
+            }
+        } else {
+            ConstructionManagerNavigation(
+                modifier = Modifier.padding(innerPadding),
+                isAuthenticated = loginUiState.isAuthenticated || onboardingState.paired
+            )
+        }
     }
 }
