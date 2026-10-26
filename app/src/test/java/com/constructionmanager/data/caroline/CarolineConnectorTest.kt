@@ -276,6 +276,57 @@ class CarolineConnectorTest {
         assertEquals(TimeUnit.SECONDS.toMillis(CarolineConnector.CALL_TIMEOUT_S).toInt(), built.callTimeoutMillis)
     }
 
+    @Test
+    fun `sign-in keeps the token and sends the email and password once, with no Authorization header`() = runBlocking<Unit> {
+        server.enqueue(json(200, """{"device_id":"dev_0123456789abcdef","token":"cdt_secret","tenant":"wcc","label":"Fold7","email":"tyler@example.com"}"""))
+        val r = connector().signIn("  Tyler@Example.com ", "correct horse battery", "Fold7", "SM-F966U", "16", "1.4")
+        assertTrue(r is ConnectorResult.Ok)
+        assertEquals("cdt_secret", settings.deviceToken)
+        assertEquals("dev_0123456789abcdef", settings.deviceId)
+        val req = server.takeRequest()
+        assertEquals("/api/auth/login", req.path)
+        assertNull(req.getHeader("Authorization"))
+        val body = JsonParser().parse(req.body.readUtf8()).asJsonObject
+        assertEquals("tyler@example.com", body.get("email").asString)   // normalized the way the server stores it
+        assertEquals("correct horse battery", body.get("password").asString)   // verbatim: a password is never trimmed
+        assertEquals("SM-F966U", body.getAsJsonObject("device").get("model").asString)
+    }
+
+    @Test
+    fun `sign-in refusal is the server's plain words and saves nothing`() = runBlocking<Unit> {
+        server.enqueue(json(401, """{"detail":"wrong email or password; check both and try again"}"""))
+        val r = connector().signIn("tyler@example.com", "nope-nope", "", null, null, null)
+        assertTrue(r is ConnectorResult.Failed)
+        assertTrue((r as ConnectorResult.Failed).error.message.contains("wrong email or password"))
+        assertNull(settings.deviceToken)
+    }
+
+    @Test
+    fun `sign-in is not retried - every attempt counts on the server`() = runBlocking<Unit> {
+        server.enqueue(json(503, """{"detail":"busy"}"""))
+        server.enqueue(json(200, """{"device_id":"dev_0123456789abcdef","token":"cdt_x"}"""))
+        val r = connector().signIn("tyler@example.com", "correct horse battery", "", null, null, null)
+        assertTrue(r is ConnectorResult.Failed)
+        assertEquals(1, server.requestCount)
+        assertNull(settings.deviceToken)
+    }
+
+    @Test
+    fun `set password sends email, code and the chosen password, and keeps no token`() = runBlocking<Unit> {
+        server.enqueue(json(200, """{"tenant":"wcc","email":"tyler@example.com","password_set":true}"""))
+        val r = connector().setPassword(" Tyler@Example.com", " abcd-efgh ", "a brand new password")
+        assertTrue(r is ConnectorResult.Ok)
+        assertEquals(true, (r as ConnectorResult.Ok).value.passwordSet)
+        assertNull(settings.deviceToken)
+        val req = server.takeRequest()
+        assertEquals("/api/auth/set-password", req.path)
+        assertNull(req.getHeader("Authorization"))
+        val body = JsonParser().parse(req.body.readUtf8()).asJsonObject
+        assertEquals("tyler@example.com", body.get("email").asString)
+        assertEquals("abcd-efgh", body.get("code").asString)
+        assertEquals("a brand new password", body.get("new_password").asString)
+    }
+
     private fun serverCertsFor(): javax.net.ssl.SSLSocketFactory {
         // the client trusts only the first certificate; reuse it by rebuilding the client for the new server
         val cert = HeldCertificate.Builder()

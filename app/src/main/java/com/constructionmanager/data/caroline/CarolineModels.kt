@@ -62,6 +62,38 @@ data class AssistTextResponse(
     @SerializedName("detail") val detail: String? = null
 )
 
+/**
+ * POST /api/auth/login (office_api.auth_login): email + password in, the same device token pairing returns.
+ * The password crosses the wire once, on this request, over https, and is never kept by the app.
+ */
+data class LoginRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String,
+    @SerializedName("device") val device: PairDeviceInfo,
+    @SerializedName("label") val label: String = ""
+)
+
+data class LoginResponse(
+    @SerializedName("device_id") val deviceId: String? = null,
+    @SerializedName("token") val token: String? = null,
+    @SerializedName("tenant") val tenant: String? = null,
+    @SerializedName("label") val label: String? = null,
+    @SerializedName("email") val email: String? = null
+)
+
+/** POST /api/auth/set-password: the owner sets their OWN password with a one-time code from their Office. */
+data class SetPasswordRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("code") val code: String,
+    @SerializedName("new_password") val newPassword: String
+)
+
+data class SetPasswordResponse(
+    @SerializedName("tenant") val tenant: String? = null,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("password_set") val passwordSet: Boolean? = null
+)
+
 data class RevokeResponse(
     @SerializedName("revoked") val revoked: String? = null
 )

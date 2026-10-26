@@ -26,7 +26,7 @@ import java.net.URI
 import java.util.TimeZone
 import javax.inject.Inject
 
-enum class OnboardingPane { WELCOME, FORM, STATUS, CONNECT, DONE }
+enum class OnboardingPane { WELCOME, FORM, STATUS, SIGNIN, CONNECT, DONE }
 
 /** The intake as the form holds it — the same fields the subscribe page collects. */
 data class IntakeFormState(
@@ -72,7 +72,19 @@ data class OnboardingUiState(
     val pairCode: String = "",
     val pairLabel: String = "Owner's phone",
     val pairing: Boolean = false,
-    val pairNote: String? = null
+    val pairNote: String? = null,
+    // email + password sign-in (the universal door, Tyler's ruling Oct 26 2026)
+    val signInPath: Boolean = false,
+    val signInEmail: String = "",
+    val signInPassword: String = "",
+    val signingIn: Boolean = false,
+    val signInNote: String? = null,
+    // first password: set with a one-time code from the Office, inside the sign-in pane
+    val settingUp: Boolean = false,
+    val setupCode: String = "",
+    val setupPassword: String = "",
+    val settingPassword: Boolean = false,
+    val setupNote: String? = null
 )
 
 /**
@@ -103,10 +115,11 @@ class OnboardingViewModel @Inject constructor(
                 paired = connector.isPaired,
                 dismissed = store.skipped,
                 boundOfficeUrl = store.boundOfficeUrl,
+                signInPath = store.skipped && token == null,
                 pane = when {
                     token != null && store.launchCompleted -> OnboardingPane.CONNECT
                     token != null -> OnboardingPane.STATUS
-                    store.skipped -> OnboardingPane.CONNECT
+                    store.skipped -> OnboardingPane.SIGNIN
                     else -> OnboardingPane.WELCOME
                 }
             )
@@ -122,15 +135,18 @@ class OnboardingViewModel @Inject constructor(
     fun backToWelcome() = _uiState.update { it.copy(pane = OnboardingPane.WELCOME) }
 
     /**
-     * The owner's sign-in: this phone already belongs to a running Caroline.
-     * It goes to the pair pane. (It used to dismiss the front door into the
+     * "I already have a Caroline — sign in instead": the email + password
+     * pane (Tyler's ruling, Oct 26 2026 — sign-in is email and password,
+     * like every other app; one door for everybody). The one-time-code pane
+     * stays as the alternate door from there. (Before the ruling this went
+     * to the pair pane; before 1.3 it dismissed the front door into the
      * app, whose only unauthenticated door is the legacy Firebase email
      * login — not Caroline's sign-in, and the owner has no credentials for
      * it; he was stranded there on the 1.2 build.)
      */
     fun skip() {
         store.skipped = true
-        _uiState.update { it.copy(pane = OnboardingPane.CONNECT, pairNote = null) }
+        _uiState.update { it.copy(pane = OnboardingPane.SIGNIN, signInPath = true, signInNote = null, pairNote = null) }
     }
 
     fun submit() {
@@ -207,9 +223,105 @@ class OnboardingViewModel @Inject constructor(
 
     fun backToStatus() = _uiState.update { it.copy(pane = OnboardingPane.STATUS) }
 
-    /** Back from the pair pane: the launch status when this phone has a launch, the welcome pane on the owner sign-in path. */
+    /** Back from the pair pane: the launch status when this phone has a launch, the sign-in pane when this
+     *  phone came in through "I already have a Caroline", the welcome pane otherwise. */
     fun backFromConnect() = _uiState.update {
-        it.copy(pane = if (store.launchToken != null) OnboardingPane.STATUS else OnboardingPane.WELCOME)
+        it.copy(
+            pane = when {
+                store.launchToken != null -> OnboardingPane.STATUS
+                store.skipped -> OnboardingPane.SIGNIN
+                else -> OnboardingPane.WELCOME
+            }
+        )
+    }
+
+    fun goSignIn() = _uiState.update { it.copy(pane = OnboardingPane.SIGNIN, signInNote = null) }
+
+    fun setSignInEmail(email: String) = _uiState.update { it.copy(signInEmail = email) }
+
+    fun setSignInPassword(password: String) = _uiState.update { it.copy(signInPassword = password) }
+
+    fun setSettingUp(on: Boolean) = _uiState.update { it.copy(settingUp = on, setupNote = null) }
+
+    fun setSetupCode(code: String) = _uiState.update { it.copy(setupCode = code) }
+
+    fun setSetupPassword(password: String) = _uiState.update { it.copy(setupPassword = password) }
+
+    /**
+     * Sign in with email + password against this phone's OWN Caroline (the binding resolved exactly as
+     * [pair] resolves it: the tenant office after a launch, this build's own Caroline on the sign-in path).
+     * The server trades the password for this phone's device token, so from here on the phone is a paired
+     * phone. The typed password is dropped from the state on every outcome; it is never kept on the phone.
+     */
+    fun signIn() {
+        val officeUrl = store.boundOfficeUrl ?: signInBinding()
+        if (officeUrl == null) {
+            _uiState.update { it.copy(signInNote = "Your system is not bound to this phone yet — wait for the launch to finish.") }
+            return
+        }
+        val email = _uiState.value.signInEmail.trim()
+        val password = _uiState.value.signInPassword
+        if (email.isEmpty() || password.isEmpty()) {
+            _uiState.update { it.copy(signInNote = "Type your email and your password.") }
+            return
+        }
+        connectorSettings.baseUrl = officeUrl
+        _uiState.update { it.copy(signingIn = true, signInNote = null) }
+        viewModelScope.launch {
+            val r = connector.signIn(email, password, _uiState.value.pairLabel, Build.MODEL, Build.VERSION.RELEASE, BuildConfig.VERSION_NAME)
+            val note = when (r) {
+                is ConnectorResult.Ok -> "Signed in. This phone now talks to your Caroline."
+                is ConnectorResult.Failed -> "Not signed in: ${r.error.message}"
+                is ConnectorResult.Queued -> "Not signed in."
+            }
+            _uiState.update {
+                it.copy(
+                    signingIn = false,
+                    signInPassword = "",
+                    paired = connector.isPaired,
+                    signInNote = note,
+                    pane = if (connector.isPaired) OnboardingPane.DONE else OnboardingPane.SIGNIN
+                )
+            }
+        }
+    }
+
+    /**
+     * Set this account's password for the first time (or again): a one-time set-password code from the
+     * Office plus the password the owner chooses, typed here and nowhere else. On success the pane goes
+     * back to plain sign-in, with the code and the typed password dropped from the state.
+     */
+    fun setPassword() {
+        val officeUrl = store.boundOfficeUrl ?: signInBinding()
+        if (officeUrl == null) {
+            _uiState.update { it.copy(setupNote = "Your system is not bound to this phone yet — wait for the launch to finish.") }
+            return
+        }
+        val email = _uiState.value.signInEmail.trim()
+        val code = _uiState.value.setupCode.trim()
+        val password = _uiState.value.setupPassword
+        if (email.isEmpty() || code.isEmpty() || password.isEmpty()) {
+            _uiState.update { it.copy(setupNote = "Type your email, the code from your Office, and the password you choose.") }
+            return
+        }
+        connectorSettings.baseUrl = officeUrl
+        _uiState.update { it.copy(settingPassword = true, setupNote = null) }
+        viewModelScope.launch {
+            when (val r = connector.setPassword(email, code, password)) {
+                is ConnectorResult.Ok -> _uiState.update {
+                    it.copy(
+                        settingPassword = false, settingUp = false, setupCode = "", setupPassword = "",
+                        setupNote = null, signInNote = "Password set. Now sign in with it."
+                    )
+                }
+                is ConnectorResult.Failed -> _uiState.update {
+                    it.copy(settingPassword = false, setupPassword = "", setupNote = "Not set: ${r.error.message}")
+                }
+                is ConnectorResult.Queued -> _uiState.update {
+                    it.copy(settingPassword = false, setupPassword = "", setupNote = "Not set.")
+                }
+            }
+        }
     }
 
     fun setPairCode(code: String) = _uiState.update { it.copy(pairCode = code) }

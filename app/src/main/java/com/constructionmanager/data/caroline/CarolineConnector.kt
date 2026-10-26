@@ -57,13 +57,40 @@ class CarolineConnector(
     suspend fun pair(code: String, label: String, model: String?, android: String?, appVersion: String?): ConnectorResult<PairResponse> {
         val req = PairRequest(code.trim(), PairDeviceInfo(model, android, appVersion), label.trim())
         val r = exchange("POST", "pair", gson.toJson(req), auth = false, retry = false, PairResponse::class.java)
+        return keepDevice(r, "paired") { it.token to it.deviceId }
+    }
+
+    /**
+     * POST auth/login - the universal door (Tyler's ruling, Oct 26 2026): email + password traded for this
+     * phone's device token, kept exactly as pairing keeps it, so a signed-in phone IS a paired phone to
+     * everything downstream. Not retried: every attempt counts on the server (wrong passwords lock the
+     * address out), so a silent resend would spend the owner's attempts. The password is never kept here -
+     * it is in this request and nowhere else on the phone.
+     */
+    suspend fun signIn(email: String, password: String, label: String, model: String?, android: String?, appVersion: String?): ConnectorResult<LoginResponse> {
+        val req = LoginRequest(email.trim().lowercase(), password, PairDeviceInfo(model, android, appVersion), label.trim())
+        val r = exchange("POST", "auth/login", gson.toJson(req), auth = false, retry = false, LoginResponse::class.java)
+        return keepDevice(r, "signed in") { it.token to it.deviceId }
+    }
+
+    /**
+     * POST auth/set-password - how a password comes to exist at all: its owner types a one-time code from
+     * their Office and the password THEY chose. Not retried: the code works once.
+     */
+    suspend fun setPassword(email: String, code: String, newPassword: String): ConnectorResult<SetPasswordResponse> {
+        val req = SetPasswordRequest(email.trim().lowercase(), code.trim(), newPassword)
+        return exchange("POST", "auth/set-password", gson.toJson(req), auth = false, retry = false, SetPasswordResponse::class.java)
+    }
+
+    /** Keep the device token a pairing or a sign-in returned; an answer without one is a failure, not a binding. */
+    private fun <T> keepDevice(r: ConnectorResult<T>, what: String, tokenAndId: (T) -> Pair<String?, String?>): ConnectorResult<T> {
         if (r is ConnectorResult.Ok) {
-            val token = r.value.token
-            if (token.isNullOrBlank() || r.value.deviceId.isNullOrBlank()) {
-                return ConnectorResult.Failed(ConnectorError.BadResponse("The server said paired but sent no token; nothing was saved."))
+            val (token, deviceId) = tokenAndId(r.value)
+            if (token.isNullOrBlank() || deviceId.isNullOrBlank()) {
+                return ConnectorResult.Failed(ConnectorError.BadResponse("The server said $what but sent no token; nothing was saved."))
             }
             settings.deviceToken = token
-            settings.deviceId = r.value.deviceId
+            settings.deviceId = deviceId
         }
         return r
     }

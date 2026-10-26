@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.constructionmanager.data.subscriber.LaunchStatus
 import com.constructionmanager.data.subscriber.SubscriberIntake
@@ -70,12 +74,25 @@ fun OnboardingScreen(viewModel: OnboardingViewModel) {
                 onRefresh = viewModel::refreshStatus,
                 onConnect = viewModel::goConnect
             )
+            OnboardingPane.SIGNIN -> SignInPane(
+                state = state,
+                onEmail = viewModel::setSignInEmail,
+                onPassword = viewModel::setSignInPassword,
+                onSignIn = viewModel::signIn,
+                onUseCode = viewModel::goConnect,
+                onSettingUp = viewModel::setSettingUp,
+                onSetupCode = viewModel::setSetupCode,
+                onSetupPassword = viewModel::setSetupPassword,
+                onSetPassword = viewModel::setPassword,
+                onBack = viewModel::backToWelcome
+            )
             OnboardingPane.CONNECT -> ConnectPane(
                 state = state,
                 onCode = viewModel::setPairCode,
                 onLabel = viewModel::setPairLabel,
                 onPair = viewModel::pair,
-                onBack = viewModel::backFromConnect
+                onBack = viewModel::backFromConnect,
+                onUsePassword = if (state.signInPath) viewModel::goSignIn else null
             )
             OnboardingPane.DONE -> DonePane(state = state)
         }
@@ -160,12 +177,14 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun Field(value: String, label: String, required: Boolean = true, onChange: (String) -> Unit) {
+private fun Field(value: String, label: String, required: Boolean = true, password: Boolean = false, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(if (required) label else label) },
         singleLine = true,
+        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 10.dp)
@@ -278,7 +297,8 @@ private fun ConnectPane(
     onCode: (String) -> Unit,
     onLabel: (String) -> Unit,
     onPair: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onUsePassword: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val crmUrl = state.launch?.confirmation?.crmUrl
@@ -309,8 +329,83 @@ private fun ConnectPane(
     Button(onClick = onPair, enabled = !state.pairing, modifier = Modifier.fillMaxWidth()) {
         if (state.pairing) CircularProgressIndicator(modifier = Modifier.height(18.dp)) else Text("Pair this phone")
     }
+    if (onUsePassword != null) {
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = onUsePassword, modifier = Modifier.fillMaxWidth()) { Text("Sign in with email and password instead") }
+    }
     Spacer(Modifier.height(8.dp))
-    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to launch status") }
+    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text(if (onUsePassword != null) "Back to sign in" else "Back to launch status") }
+}
+
+/**
+ * The universal door (Tyler's ruling, Oct 26 2026): email + password against your OWN Caroline's system —
+ * the same form for the owner and for every subscriber, first run and after. The one-time code is the
+ * alternate door, one tap down. A first password is set right here too: a code from your Office and a
+ * password you choose, typed into this pane and nowhere else.
+ */
+@Composable
+private fun SignInPane(
+    state: OnboardingUiState,
+    onEmail: (String) -> Unit,
+    onPassword: (String) -> Unit,
+    onSignIn: () -> Unit,
+    onUseCode: () -> Unit,
+    onSettingUp: (Boolean) -> Unit,
+    onSetupCode: (String) -> Unit,
+    onSetupPassword: (String) -> Unit,
+    onSetPassword: () -> Unit,
+    onBack: () -> Unit
+) {
+    Text("Sign in to your Caroline", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(12.dp))
+    Text(
+        "Your account is on YOUR system — sign in with the email and password of your Caroline account. " +
+            "This phone keeps its own key afterwards; you can revoke it from your Office."
+    )
+    state.boundOfficeUrl?.let {
+        Spacer(Modifier.height(8.dp))
+        Text("Your system: $it", style = MaterialTheme.typography.bodySmall)
+    }
+    Spacer(Modifier.height(16.dp))
+    Field(state.signInEmail, "Email") { onEmail(it) }
+    Field(state.signInPassword, "Password", password = true) { onPassword(it) }
+    state.signInNote?.let {
+        Text(it, color = if (state.paired) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        Spacer(Modifier.height(8.dp))
+    }
+    Button(onClick = onSignIn, enabled = !state.signingIn, modifier = Modifier.fillMaxWidth()) {
+        if (state.signingIn) CircularProgressIndicator(modifier = Modifier.height(18.dp)) else Text("Sign in")
+    }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onUseCode, modifier = Modifier.fillMaxWidth()) {
+        Text("Sign in with a one-time code instead")
+    }
+    Spacer(Modifier.height(16.dp))
+    if (!state.settingUp) {
+        TextButton(onClick = { onSettingUp(true) }, modifier = Modifier.fillMaxWidth()) {
+            Text("First time, or no password yet? Set your password")
+        }
+    } else {
+        SectionTitle("Set your password")
+        Text(
+            "Make a one-time set-password code in your Office, then type it here with the password you " +
+                "choose. The password is yours — it is never sent anywhere but your own system."
+        )
+        Spacer(Modifier.height(8.dp))
+        Field(state.setupCode, "Set-password code from your Office") { onSetupCode(it) }
+        Field(state.setupPassword, "The password you choose", password = true) { onSetupPassword(it) }
+        state.setupNote?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
+        }
+        Button(onClick = onSetPassword, enabled = !state.settingPassword, modifier = Modifier.fillMaxWidth()) {
+            if (state.settingPassword) CircularProgressIndicator(modifier = Modifier.height(18.dp)) else Text("Set my password")
+        }
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = { onSettingUp(false) }, modifier = Modifier.fillMaxWidth()) { Text("Back to sign in") }
+    }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
 }
 
 @Composable
