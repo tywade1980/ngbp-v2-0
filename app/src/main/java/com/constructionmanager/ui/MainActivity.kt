@@ -125,7 +125,9 @@ private fun MainContent(
     // app proper; pairing counts as being in, no legacy sign-in required of a subscriber.
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingState by onboardingViewModel.uiState.collectAsState()
-    val showOnboarding = !loginUiState.isAuthenticated && !onboardingState.paired && !onboardingState.dismissed
+    // The legacy Firebase login is never an entry point: an unauthenticated, unpaired phone always
+    // starts on this front door (the owner's sign-in is the pair pane inside it), never on auth/login.
+    val showOnboarding = !loginUiState.isAuthenticated && !onboardingState.paired
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

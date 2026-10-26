@@ -106,6 +106,7 @@ class OnboardingViewModel @Inject constructor(
                 pane = when {
                     token != null && store.launchCompleted -> OnboardingPane.CONNECT
                     token != null -> OnboardingPane.STATUS
+                    store.skipped -> OnboardingPane.CONNECT
                     else -> OnboardingPane.WELCOME
                 }
             )
@@ -120,10 +121,16 @@ class OnboardingViewModel @Inject constructor(
 
     fun backToWelcome() = _uiState.update { it.copy(pane = OnboardingPane.WELCOME) }
 
-    /** The owner's escape hatch: this phone already belongs to a running Caroline. */
+    /**
+     * The owner's sign-in: this phone already belongs to a running Caroline.
+     * It goes to the pair pane. (It used to dismiss the front door into the
+     * app, whose only unauthenticated door is the legacy Firebase email
+     * login — not Caroline's sign-in, and the owner has no credentials for
+     * it; he was stranded there on the 1.2 build.)
+     */
     fun skip() {
         store.skipped = true
-        _uiState.update { it.copy(dismissed = true) }
+        _uiState.update { it.copy(pane = OnboardingPane.CONNECT, pairNote = null) }
     }
 
     fun submit() {
@@ -200,9 +207,31 @@ class OnboardingViewModel @Inject constructor(
 
     fun backToStatus() = _uiState.update { it.copy(pane = OnboardingPane.STATUS) }
 
+    /** Back from the pair pane: the launch status when this phone has a launch, the welcome pane on the owner sign-in path. */
+    fun backFromConnect() = _uiState.update {
+        it.copy(pane = if (store.launchToken != null) OnboardingPane.STATUS else OnboardingPane.WELCOME)
+    }
+
     fun setPairCode(code: String) = _uiState.update { it.copy(pairCode = code) }
 
     fun setPairLabel(label: String) = _uiState.update { it.copy(pairLabel = label) }
+
+    /**
+     * The binding for the owner sign-in path. A phone that chose "I already
+     * have a Caroline" belongs to a system that already exists — there is no
+     * launch to bind from — so it binds this build's own Caroline endpoint,
+     * the same default a fresh install starts from, and pairs against the
+     * owner's existing system. A phone that did NOT choose sign-in (a launch
+     * still in flight) gets nothing here: [pair] keeps telling it to wait
+     * for the launch to finish, and the launch binding is never overridden.
+     */
+    private fun signInBinding(): String? {
+        if (!store.skipped) return null
+        val url = CarolineEndpoint.DEFAULT_BASE_URL
+        store.boundOfficeUrl = url
+        _uiState.update { it.copy(boundOfficeUrl = url) }
+        return url
+    }
 
     /**
      * Pair this phone with the tenant's Caroline, with a one-time code the
@@ -211,7 +240,7 @@ class OnboardingViewModel @Inject constructor(
      * a mistyped code is not a reason to point the phone anywhere else.
      */
     fun pair() {
-        val officeUrl = store.boundOfficeUrl
+        val officeUrl = store.boundOfficeUrl ?: signInBinding()
         if (officeUrl == null) {
             _uiState.update { it.copy(pairNote = "Your system is not bound to this phone yet — wait for the launch to finish.") }
             return

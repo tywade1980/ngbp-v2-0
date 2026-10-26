@@ -75,7 +75,7 @@ fun OnboardingScreen(viewModel: OnboardingViewModel) {
                 onCode = viewModel::setPairCode,
                 onLabel = viewModel::setPairLabel,
                 onPair = viewModel::pair,
-                onBack = viewModel::backToStatus
+                onBack = viewModel::backFromConnect
             )
             OnboardingPane.DONE -> DonePane(state = state)
         }
