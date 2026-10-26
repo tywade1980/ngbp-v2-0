@@ -15,8 +15,8 @@ android {
         applicationId = "com.constructionmanager"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1-2026-10-26"
+        versionCode = 3
+        versionName = "1.2-2026-10-26"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -33,9 +33,22 @@ android {
         }
     }
 
+    signingConfigs {
+        // No release key exists for this app. The "clean"/release builds below are signed OPENLY with the
+        // standard Android debug keystore from this build machine (~/.android/debug.keystore) so the APK
+        // carries the base applicationId with no .debug suffix and still installs. This is not a release key.
+        create("debugKey") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("debugKey")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -44,6 +57,13 @@ android {
         debug {
             isDebuggable = true
             applicationIdSuffix = ".debug"
+        }
+        // Whole-new build for Tyler's phone (Oct 26 2026): debug-shaped code, but the CLEAN package
+        // com.constructionmanager (no .debug suffix) so it never collides with the .debug install.
+        create("clean") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = null
+            signingConfig = signingConfigs.getByName("debugKey")
         }
     }
     
