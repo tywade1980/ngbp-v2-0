@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import com.constructionmanager.data.settings.SettingsStore
-import com.constructionmanager.ui.navigation.ConstructionManagerNavigation
+import com.constructionmanager.ui.screens.hocc.HoccRoot
 import com.constructionmanager.ui.screens.onboarding.OnboardingScreen
 import com.constructionmanager.ui.screens.onboarding.OnboardingViewModel
 import com.constructionmanager.ui.screens.auth.LoginViewModel
@@ -67,11 +67,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val darkTheme by settingsStore.darkTheme.collectAsState()
-            ConstructionManagerTheme(darkTheme = darkTheme) {
-                MainContent(
-                    updateDownloaded = updateDownloaded.value,
-                    onCompleteUpdate = { playUpdateManager.manager.completeUpdate() }
-                )
+            ConstructionManagerTheme(darkTheme = darkTheme, dynamicColor = false) {
+                MainContent()
             }
         }
     }
@@ -101,47 +98,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainContent(
-    updateDownloaded: Boolean,
-    onCompleteUpdate: () -> Unit
-) {
-    val loginViewModel: LoginViewModel = hiltViewModel()
-    val loginUiState by loginViewModel.uiState.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(updateDownloaded) {
-        if (updateDownloaded) {
-            val result = snackbarHostState.showSnackbar(
-                message = "Update downloaded.",
-                actionLabel = "Restart"
-            )
-            if (result == SnackbarResult.ActionPerformed) onCompleteUpdate()
-        }
-    }
-
-    // The subscriber front door comes first on a phone that has no other way in: not signed into the
-    // legacy account, not paired to any Caroline, and not dismissed by the owner ("I already have a
-    // Caroline"). A paired phone - Tyler's, or a subscriber whose launch landed - goes straight to the
-    // app proper; pairing counts as being in, no legacy sign-in required of a subscriber.
+private fun MainContent() {
+    // The front door is the connector's: a phone that is not signed in to Caroline starts on the
+    // onboarding doors (sign in / set your password / pair with a code). Once any of those doors has
+    // signed this phone in, the app proper is the six native tabs over the one record - the legacy
+    // Firebase login is not an entry point and never gates this screen.
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val onboardingState by onboardingViewModel.uiState.collectAsState()
-    // The legacy Firebase login is never an entry point: an unauthenticated, unpaired phone always
-    // starts on this front door (the owner's sign-in is the pair pane inside it), never on auth/login.
-    val showOnboarding = !loginUiState.isAuthenticated && !onboardingState.paired
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-        if (showOnboarding) {
-            Box(modifier = Modifier.padding(innerPadding)) {
-                OnboardingScreen(onboardingViewModel)
-            }
-        } else {
-            ConstructionManagerNavigation(
-                modifier = Modifier.padding(innerPadding),
-                isAuthenticated = loginUiState.isAuthenticated || onboardingState.paired
-            )
-        }
+    if (!onboardingState.paired) {
+        OnboardingScreen(onboardingViewModel)
+    } else {
+        HoccRoot()
     }
 }

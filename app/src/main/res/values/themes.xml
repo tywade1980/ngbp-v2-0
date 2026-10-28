@@ -2,9 +2,9 @@
 <resources>
     <style name="Base.Theme.ConstructionManager" parent="android:Theme.Material.Light.NoActionBar">
         <!-- Basic Material theme with simple customization -->
-        <item name="android:colorPrimary">@android:color/holo_orange_dark</item>
-        <item name="android:colorPrimaryDark">@android:color/holo_orange_dark</item>
-        <item name="android:colorAccent">@android:color/holo_blue_dark</item>
+        <item name="android:colorPrimary">@color/hocc_navy</item>
+        <item name="android:colorPrimaryDark">@color/hocc_navy</item>
+        <item name="android:colorAccent">@color/hocc_blue</item>
         <item name="android:colorBackground">@android:color/white</item>
         <item name="android:textColorPrimary">@android:color/black</item>
     </style>

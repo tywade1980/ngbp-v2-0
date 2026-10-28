@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ConstructPro AI</string>
+    <string name="app_name">HOCC</string>
     <string name="welcome_message">Welcome to ConstructPro AI</string>
     <string name="assistant_title">Caroline — AI Assistant</string>
     <string name="voice_title">Calls</string>

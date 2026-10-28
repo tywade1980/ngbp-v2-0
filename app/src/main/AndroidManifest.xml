@@ -7,6 +7,8 @@
       photos) is added WITH the code and the runtime request that uses it, not before.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Photo Documentation takes pictures (runtime request in PhotoDocumentationScreen) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- OTA self-update: install a downloaded update APK (sideload builds only; Play does not allow it - see B13) -->
@@ -17,6 +19,8 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.ConstructionManager"

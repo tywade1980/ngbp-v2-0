@@ -55,6 +55,7 @@ data class AssistTextResponse(
     @SerializedName("stored") val stored: Boolean? = null,
     @SerializedName("duplicate") val duplicate: Boolean? = null,
     @SerializedName("message_id") val messageId: Long? = null,
+    @SerializedName("turn_id") val turnId: String? = null,
     @SerializedName("at") val at: String? = null,
     @SerializedName("thread") val thread: String? = null,
     @SerializedName("answered") val answered: Boolean? = null,

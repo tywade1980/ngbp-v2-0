@@ -12,11 +12,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.constructionmanager"
+        applicationId = "com.wadecustomcarpentry.hocc"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4-2026-10-26"
+        versionCode = 13
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -64,6 +64,11 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = null
             signingConfig = signingConfigs.getByName("debugKey")
+            // HOCC 0.5.0: shrink the shipped build (R8 + resource shrinking, proguard-rules.pro) - the
+            // un-minified tree is 22 MB, too large to deliver as an email attachment (Gmail's 25 MB cap
+            // counts the base64-encoded message, ~29.5 MB). Code stays debug-shaped otherwise.
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
     

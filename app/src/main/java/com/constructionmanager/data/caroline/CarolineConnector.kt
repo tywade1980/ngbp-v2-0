@@ -1,6 +1,7 @@
 package com.constructionmanager.data.caroline
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -11,7 +12,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -108,6 +111,89 @@ class CarolineConnector(
     /** GET briefing - the same owner briefing the phone line reads from the record. */
     suspend fun briefing(): ConnectorResult<BriefingResponse> =
         exchange("GET", "briefing", null, auth = true, retry = true, BriefingResponse::class.java)
+
+    // ------------------------------------------------------------------ HOCC screens (0.5.0): the office record, read as JSON
+
+    /** GET any office route as a JSON element - the HOCC screens read the one record through here. */
+    suspend fun getJson(path: String): ConnectorResult<JsonElement> =
+        exchange("GET", path, null, auth = true, retry = true, JsonElement::class.java)
+
+    /** POST a JSON body to an office route, answer as a JSON element. */
+    suspend fun postJson(path: String, body: JsonObject): ConnectorResult<JsonElement> =
+        exchange("POST", path, gson.toJson(body), auth = true, retry = true, JsonElement::class.java)
+
+    /** GET assist/thread - the owner's thread with Caroline (what the Caroline screen shows). */
+    suspend fun assistThread(limit: Int = 60): ConnectorResult<JsonElement> =
+        getJson("assist/thread?limit=${limit.coerceIn(1, 200)}")
+
+    /** GET assist/turn/{id} - poll one reply turn until it is done (answer inside) or failed. */
+    suspend fun assistTurn(turnId: String): ConnectorResult<JsonElement> =
+        getJson("assist/turn/$turnId")
+
+    /** GET hocc/app - the newest published build of this app (version_code, sha256, notes). */
+    suspend fun hoccLatest(): ConnectorResult<JsonElement> = getJson("hocc/app")
+
+    /**
+     * POST owner/location - this phone tells the record where it is. The record answers only that it stored the
+     * reading; the place it belongs to comes back on the Site screen's own read (GET owner/location).
+     */
+    suspend fun reportLocation(lat: Double, lng: Double, accuracyM: Float?, atIso: String, readingId: String): ConnectorResult<JsonElement> {
+        val body = JsonObject().apply {
+            addProperty("lat", lat)
+            addProperty("lng", lng)
+            if (accuracyM != null) addProperty("accuracy_m", accuracyM.toDouble())
+            addProperty("at", atIso)
+            addProperty("id", readingId)
+            addProperty("label", "HOCC app")
+        }
+        return postJson("owner/location", body)
+    }
+
+    /**
+     * GET hocc/app/apk into [target] with this phone's token, then check the bytes against [expectedSha256]
+     * when the manifest gave one. A long download gets its own timeouts - the shared client's 30 s call cap
+     * would cut a full APK on a slow connection.
+     */
+    suspend fun downloadLatestApk(target: File, expectedSha256: String?): ConnectorResult<File> {
+        val url = resolve("hocc/app/apk") ?: return ConnectorResult.Failed(ConnectorError.BadResponse("The server address is not usable."))
+        if (!url.isHttps) return ConnectorResult.Failed(ConnectorError.BadResponse("Only https addresses are allowed."))
+        val token = settings.deviceToken
+        if (token.isNullOrBlank()) return ConnectorResult.Failed(ConnectorError.NotPaired())
+        val dlClient = client.newBuilder()
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .build()
+        val req = Request.Builder().url(url).header("Authorization", "Bearer $token").get().build()
+        return withContext(Dispatchers.IO) {
+            try {
+                dlClient.newCall(req).execute().use { resp ->
+                    if (resp.code == 401) {
+                        settings.deviceToken = null
+                        return@withContext ConnectorResult.Failed(ConnectorError.NotPaired("This phone's sign-in is no longer accepted. Sign in again."))
+                    }
+                    val body = resp.body ?: return@withContext ConnectorResult.Failed(ConnectorError.BadResponse("The download came back empty."))
+                    if (!resp.isSuccessful) return@withContext ConnectorResult.Failed(ConnectorError.Http(resp.code, "The download was refused (${resp.code})."))
+                    target.parentFile?.mkdirs()
+                    body.byteStream().use { input -> target.outputStream().use { out -> input.copyTo(out) } }
+                    if (expectedSha256 != null) {
+                        val digest = MessageDigest.getInstance("SHA-256")
+                        target.inputStream().use { input ->
+                            val buf = ByteArray(64 * 1024)
+                            while (true) { val n = input.read(buf); if (n < 0) break; digest.update(buf, 0, n) }
+                        }
+                        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                        if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                            target.delete()
+                            return@withContext ConnectorResult.Failed(ConnectorError.BadResponse("The downloaded app did not match its fingerprint, so it was not kept."))
+                        }
+                    }
+                    ConnectorResult.Ok(target)
+                }
+            } catch (e: IOException) {
+                ConnectorResult.Failed(ConnectorError.Network("No connection to Caroline during the download (" + (e.message ?: "network error") + ")."))
+            }
+        }
+    }
 
     /**
      * POST assist/text - a typed message to Caroline. The server stores it once per [clientMsgId], so it is safe to
