@@ -68,7 +68,7 @@ fun JobsScreen(vm: HoccViewModel, openJobId: Int?, onOpenJob: (Int) -> Unit, onC
             HoccCard("Archived - completed (${done.size})") { done.forEach { p -> JobRow(p, onOpenJob) } }
         }
         if (all.isEmpty() && !state.loading && state.error == null) {
-            EmptyLine("No jobs on the record yet.")
+            EmptyLine("No jobs on file yet.")
         }
     }
 }
@@ -248,7 +248,7 @@ fun ScheduleScreen(vm: HoccViewModel) {
                 }
                 rendered = true
             }
-            if (!rendered) EmptyLine("Nothing scheduled on the record right now.")
+            if (!rendered) EmptyLine("Nothing scheduled right now.")
         }
     }
 }

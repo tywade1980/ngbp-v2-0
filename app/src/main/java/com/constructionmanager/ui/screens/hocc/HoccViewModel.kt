@@ -166,7 +166,7 @@ class HoccViewModel @Inject constructor(
         }
     }
 
-    /** Read this phone's location with its own permission, show it, and put the reading on the record. */
+    /** Read this phone's location with its own permission, show it, and put the reading on file. */
     fun readLocation(context: Context) {
         if (_locationUi.value.reading) return
         _locationUi.value = _locationUi.value.copy(reading = true, note = null)
@@ -188,9 +188,9 @@ class HoccViewModel @Inject constructor(
             _locationUi.value = LocationUiState(
                 fix = fix,
                 note = when {
-                    stored -> "On the record."
-                    r is ConnectorResult.Failed -> "Read fine, but the record did not take it: ${r.error.message}"
-                    else -> "Sent to the record."
+                    stored -> "On file."
+                    r is ConnectorResult.Failed -> "Read fine, but the office did not take it: ${r.error.message}"
+                    else -> "Sent to the office."
                 },
                 reading = false,
                 reported = stored
@@ -287,6 +287,11 @@ class HoccViewModel @Inject constructor(
         if (body.isEmpty() || _sending.value) return
         _sending.value = true
         _chatNote.value = null
+        // his words go on the thread the moment he sends them; the record's copy replaces this line on the next read
+        // (Tyler, Nov 4 2026: "doesnt transfer to conversation display below")
+        val now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+        val cur = _chat.value.data ?: ChatData(emptyList(), null)
+        _chat.value = _chat.value.copy(data = cur.copy(messages = cur.messages + ChatMessage(true, body, now)))
         viewModelScope.launch {
             when (val r = connector.sendText(body)) {
                 is ConnectorResult.Ok -> {
@@ -317,6 +322,9 @@ class HoccViewModel @Inject constructor(
     }
 
     // ------------------------------------------------------------------ Office + app update
+
+    /** One read of an Office door, for a card that shows what it says. */
+    suspend fun readJson(path: String): JsonObject? = connector.getJson(path).valueOrNull()?.asObjOrNull()
 
     fun loadOffice() {
         if (_office.value.loading) return

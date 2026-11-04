@@ -1,6 +1,5 @@
 package com.constructionmanager.ui.screens.hocc
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +25,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,9 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-/** The six places in the app - one navigation system, the app's own, nothing mirrored from any web UI. */
+/** The six places in the app. Home is the way into a room; the room is where the work happens. */
 enum class HoccTab(val label: String, val icon: ImageVector) {
-    Hub("Hub", Icons.Default.Home),
+    Home("Home", Icons.Default.Home),
     Site("Site", Icons.Default.Place),
     Jobs("Jobs", Icons.Default.Work),
     Schedule("Schedule", Icons.Default.CalendarMonth),
@@ -47,28 +48,35 @@ enum class HoccTab(val label: String, val icon: ImageVector) {
     Office("Office", Icons.Default.Settings)
 }
 
-/** The app proper, once the phone is signed in: the six tabs over the one record. */
+/** The room key survives rotation and the fold (the Fold7 changes configuration when it opens). */
+private val RoomKeySaver = Saver<RoomKey?, List<String>>(
+    save = { k -> if (k == null) emptyList() else listOf(k.kind, k.value, k.projectIds.joinToString(","), k.startId?.toString() ?: "") },
+    restore = { l -> if (l.size < 4) null else RoomKey(l[0], l[1], l[2].split(',').mapNotNull { it.toIntOrNull() }, l[3].toIntOrNull()) }
+)
+
+/** The app proper, once the phone is signed in: the tabs over the one record, and the room over the tabs. */
 @Composable
 fun HoccRoot() {
     val vm: HoccViewModel = hiltViewModel()
-    var tabName by rememberSaveable { mutableStateOf(HoccTab.Hub.name) }
-    val tab = runCatching { HoccTab.valueOf(tabName) }.getOrDefault(HoccTab.Hub)
-    var openJobId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val roomVm: RoomViewModel = hiltViewModel()
+    var tabName by rememberSaveable { mutableStateOf(HoccTab.Home.name) }
+    val tab = runCatching { HoccTab.valueOf(tabName) }.getOrDefault(HoccTab.Home)
+    var roomKey by rememberSaveable(stateSaver = RoomKeySaver) { mutableStateOf<RoomKey?>(null) }
+    val jobs by vm.jobs.collectAsState()
 
-    BackHandler(enabled = tab == HoccTab.Jobs && openJobId != null) { openJobId = null }
+    // Home IS the board (Tyler, Nov 2 2026). Opening a job from anywhere lands on Home with that room up.
+    val goRoom: (RoomKey) -> Unit = { roomKey = it; tabName = HoccTab.Home.name }
 
+    MaterialTheme(colorScheme = Board.colors, typography = Board.typography) {
     Scaffold(
         bottomBar = {
             NavigationBar {
                 HoccTab.values().forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,
-                        onClick = {
-                            tabName = t.name
-                            if (t != HoccTab.Jobs) openJobId = null
-                        },
+                        onClick = { tabName = t.name },
                         icon = { Icon(t.icon, contentDescription = t.label) },
-                        label = { Text(t.label) }
+                        label = { Text(t.label, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
@@ -76,25 +84,18 @@ fun HoccRoot() {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             when (tab) {
-                HoccTab.Hub -> HubScreen(
-                    vm,
-                    onGoJobs = { tabName = HoccTab.Jobs.name },
-                    onGoSite = { tabName = HoccTab.Site.name }
-                )
-                HoccTab.Site -> SiteScreen(vm, onOpenJob = { openJobId = it; tabName = HoccTab.Jobs.name })
-                HoccTab.Jobs -> JobsScreen(
-                    vm,
-                    openJobId = openJobId,
-                    onOpenJob = { openJobId = it },
-                    onCloseJob = { openJobId = null }
-                )
+                HoccTab.Home -> HomeScreen(vm, roomVm, roomKey, onOpenRoom = goRoom)
+                HoccTab.Site -> SiteScreen(vm, onOpenJob = { id -> goRoom(oneJob(id, jobs.data?.objects().orEmpty())) })
+                HoccTab.Jobs -> JobsScreen(vm, openJobId = null, onOpenJob = { id -> goRoom(oneJob(id, jobs.data?.objects().orEmpty())) }, onCloseJob = {})
                 HoccTab.Schedule -> ScheduleScreen(vm)
                 HoccTab.Caroline -> CarolineScreen(vm)
                 HoccTab.Office -> OfficeScreen(vm)
             }
         }
     }
+    }
 }
+
 
 /** A scrolling screen with its name and a way to read the record again - the shape every tab shares. */
 @Composable

@@ -6,6 +6,7 @@ import com.constructionmanager.data.caroline.ConnectorSettings
 import com.constructionmanager.data.caroline.Outbox
 import com.constructionmanager.data.caroline.PrefsConnectorSettings
 import com.constructionmanager.data.caroline.PrefsOutbox
+import com.constructionmanager.data.caroline.RoomWriters
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,4 +34,10 @@ object CarolineModule {
     @Singleton
     fun provideCarolineConnector(client: OkHttpClient, settings: ConnectorSettings, outbox: Outbox): CarolineConnector =
         CarolineConnector(client, settings, outbox)
+
+    /** The room's writers (HOCC 0.6): the same token, the same address, sent once and never retried. */
+    @Provides
+    @Singleton
+    fun provideRoomWriters(connector: CarolineConnector, client: OkHttpClient, settings: ConnectorSettings): RoomWriters =
+        RoomWriters(connector, client, settings)
 }

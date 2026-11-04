@@ -15,8 +15,8 @@ android {
         applicationId = "com.wadecustomcarpentry.hocc"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.5.0"
+        versionCode = 28
+        versionName = "0.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -47,7 +47,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false  // 0.5.2: shrink OFF - 0.5.1 installed but died at launch; delivery is the download link now, not Gmail
             signingConfig = signingConfigs.getByName("debugKey")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -67,8 +67,8 @@ android {
             // HOCC 0.5.0: shrink the shipped build (R8 + resource shrinking, proguard-rules.pro) - the
             // un-minified tree is 22 MB, too large to deliver as an email attachment (Gmail's 25 MB cap
             // counts the base64-encoded message, ~29.5 MB). Code stays debug-shaped otherwise.
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false  // 0.5.2: shrink OFF - 0.5.1 installed but died at launch; delivery is the download link now, not Gmail
+            isShrinkResources = false
         }
     }
     

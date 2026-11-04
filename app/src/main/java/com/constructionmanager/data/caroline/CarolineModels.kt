@@ -37,7 +37,8 @@ data class CallSummary(
     @SerializedName("caller_name") val callerName: String? = null,
     @SerializedName("lead_status") val leadStatus: String? = null,
     @SerializedName("outcome") val outcome: String? = null,
-    @SerializedName("summary") val summary: String? = null
+    @SerializedName("summary") val summary: String? = null,
+    @SerializedName("channel") val channel: String? = null
 )
 
 /** GET /api/briefing: the app shows `text` (the same owner briefing the line uses). */

@@ -139,7 +139,7 @@ fun KvRow(label: String, value: String?) {
 }
 
 @Composable
-fun LoadingLine(text: String = "Reading the record…") {
+fun LoadingLine(text: String = "Reading…") {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         CircularProgressIndicator(modifier = Modifier.padding(2.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium)

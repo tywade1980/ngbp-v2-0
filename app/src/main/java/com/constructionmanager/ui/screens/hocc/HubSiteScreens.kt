@@ -106,7 +106,7 @@ fun HubScreen(vm: HoccViewModel, onGoJobs: () -> Unit, onGoSite: () -> Unit) {
                 }
             }
             if (d.briefing.isNullOrBlank() && d.calls.isEmpty()) {
-                EmptyLine("Nothing on the Hub yet - the briefing and today's calls land here.")
+                EmptyLine("Nothing here yet - the briefing and today's calls land here.")
             }
         }
     }
@@ -164,7 +164,7 @@ fun SiteScreen(vm: HoccViewModel, onOpenJob: (Int) -> Unit) {
                 .sortedBy { (it.str("name") ?: "").lowercase() }
             val leads = all.count { it.boolOf("site") != true && it.str("status") == "lead" }
             HoccCard("Sites (${sites.size})") {
-                if (sites.isEmpty()) EmptyLine("No sites on the record yet - a project becomes a site once it is estimating, quoted, approved or underway.")
+                if (sites.isEmpty()) EmptyLine("No sites on file yet - a project becomes a site once it is estimating, quoted, approved or underway.")
                 sites.forEach { p ->
                     SiteRow(p) { id -> onOpenJob(id) }
                 }

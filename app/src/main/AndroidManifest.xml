@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Photo Documentation takes pictures (runtime request in PhotoDocumentationScreen) -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- OTA self-update: install a downloaded update APK (sideload builds only; Play does not allow it - see B13) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -29,7 +32,8 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.ConstructionManager">
+            android:theme="@style/Theme.ConstructionManager"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

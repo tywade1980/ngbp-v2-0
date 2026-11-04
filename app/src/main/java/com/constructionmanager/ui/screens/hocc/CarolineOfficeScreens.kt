@@ -1,5 +1,6 @@
 package com.constructionmanager.ui.screens.hocc
 
+import kotlinx.coroutines.launch
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -8,6 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,17 +52,20 @@ import java.io.File
 @Composable
 fun CarolineScreen(vm: HoccViewModel) {
     val chatState by vm.chat.collectAsState()
-    val calls by vm.chatCalls.collectAsState()
+    // (her line's calls with other people used to list here; they are in the Call and text log now, under that person - Tyler, Nov 3 2026)
     val sending by vm.sending.collectAsState()
     val note by vm.chatNote.collectAsState()
-    var draft by remember { mutableStateOf("") }
+    // TextFieldValue, not a String: with a String the keyboard's half-typed (composing) word came back after Send
+    // (Tyler, Nov 4 2026: "chat input doesnt clear after send... carries over to the next message")
+    var draft by remember { mutableStateOf(TextFieldValue("")) }
     val listState = rememberLazyListState()
     val messages = chatState.data?.messages.orEmpty()
     LaunchedEffect(Unit) { vm.loadCaroline() }
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, sending) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp)) {
+    // imePadding: the app is edge-to-edge, so the keyboard sat over the input ("the keyboard covers the chat block")
+    Column(Modifier.fillMaxSize().imePadding().padding(horizontal = 14.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Caroline", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = { vm.loadCaroline() }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
@@ -72,15 +79,10 @@ fun CarolineScreen(vm: HoccViewModel) {
         }
         LazyColumn(
             state = listState, modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)
         ) {
             items(messages) { m -> ChatBubble(m) }
-            if (calls.isNotEmpty()) {
-                item {
-                    Text("Recent calls", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
-                }
-                items(calls) { c -> CallRow(c) }
-            }
+            // only the two of them here (Tyler, Nov 3 2026): calls on her line with other people are in the Call and text log, under that person
         }
         note?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
@@ -96,13 +98,36 @@ fun CarolineScreen(vm: HoccViewModel) {
             OutlinedTextField(
                 value = draft, onValueChange = { draft = it },
                 placeholder = { Text("Message Caroline") },
-                maxLines = 4, modifier = Modifier.weight(1f)
+                maxLines = 5, modifier = Modifier.weight(1f)
             )
             Button(
-                onClick = { val t = draft; draft = ""; vm.sendChat(t) },
-                enabled = draft.isNotBlank() && !sending
+                onClick = { val t = draft.text; draft = TextFieldValue(""); vm.sendChat(t) },
+                enabled = draft.text.isNotBlank() && !sending
             ) { Text("Send") }
         }
+    }
+}
+
+/** Her replies come with **bold** and ### headings; the screen shows the words with the weight, not the markup. */
+fun plainWords(text: String): androidx.compose.ui.text.AnnotatedString = androidx.compose.ui.text.buildAnnotatedString {
+    val bold = androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)
+    text.lines().forEachIndexed { li, raw ->
+        if (li > 0) append("\n")
+        var line = raw
+        val heading = Regex("^#{1,6}\\s+").containsMatchIn(line)
+        if (heading) line = line.replace(Regex("^#{1,6}\\s+"), "")
+        line = line.replace(Regex("^(\\s*)[-*]\\s+"), "$1• ")
+        if (heading) pushStyle(bold)
+        var i = 0
+        while (i < line.length) {
+            val open = line.indexOf("**", i)
+            if (open < 0) { append(line.substring(i)); break }
+            val close = line.indexOf("**", open + 2)
+            if (close < 0) { append(line.substring(i)); break }
+            append(line.substring(i, open)); pushStyle(bold); append(line.substring(open + 2, close)); pop()
+            i = close + 2
+        }
+        if (heading) pop()
     }
 }
 
@@ -112,11 +137,11 @@ private fun ChatBubble(m: ChatMessage) {
         Surface(
             color = if (m.fromOwner) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier.fillMaxWidth(if (m.fromOwner) 0.82f else 0.92f)
         ) {
             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    m.text, style = MaterialTheme.typography.bodyMedium,
+                    plainWords(m.text), style = MaterialTheme.typography.bodyMedium,
                     color = if (m.fromOwner) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 m.at?.let { serverTimeToLocal(it) }?.let {
@@ -172,45 +197,19 @@ fun OfficeScreen(vm: HoccViewModel) {
             }
         }
 
-        if (d != null) {
-            val texts = d.messages.objects()
-            HoccCard("Texts (${texts.size})") {
-                if (texts.isEmpty()) EmptyLine("No texts on the record.")
-                texts.take(25).forEach { m ->
-                    val party = m.str("contact_name", "name") ?: m.str("from_number", "party") ?: "Text"
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(party, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        m.str("direction")?.let { dir -> humanStatus(dir)?.let { StatusChip(it) } }
-                    }
-                    m.str("body", "text")?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                    m.str("created_at", "at", "sent_at")?.let { at ->
-                        Text(serverTimeToLocal(at) ?: at, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
 
+        // his phone's call recordings -> the record (Tyler, Nov 3 2026)
+        RecordingsCard(vm)
+        if (d != null) {
             val estimates = (d.estimates?.rowsOf("estimates", "rows", "items") ?: com.google.gson.JsonArray()).objects()
             HoccCard("Estimates (${estimates.size})") {
-                if (estimates.isEmpty()) EmptyLine("No estimates on the record.")
+                if (estimates.isEmpty()) EmptyLine("No estimates on file.")
                 estimates.take(25).forEach { e ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(e.str("client_name", "client", "label") ?: "Estimate", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         e.str("status")?.let { s -> humanStatus(s)?.let { StatusChip(it) } }
                     }
                     val sub = listOfNotNull(e.str("number", "estimate_number"), money(e.num("total", "grand_total", "amount"))).joinToString(" · ")
-                    if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            val contacts = d.contacts.objects()
-            HoccCard("Contacts (${contacts.size})") {
-                if (contacts.isEmpty()) EmptyLine("No contacts on the record.")
-                contacts.take(30).forEach { c ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(c.str("name") ?: "Contact", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        c.str("lead_status", "status")?.let { s -> humanStatus(s)?.let { StatusChip(it) } }
-                    }
-                    val sub = listOfNotNull(c.str("phone"), c.str("address")).joinToString(" · ")
                     if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -246,4 +245,58 @@ private fun installApk(context: Context, file: File) {
         .setDataAndType(uri, "application/vnd.android.package-archive")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
+}
+
+
+@Composable
+private fun RecordingsCard(vm: HoccViewModel) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var status by remember { mutableStateOf<com.google.gson.JsonObject?>(null) }
+    var outcome by remember { mutableStateOf<com.constructionmanager.data.caroline.RecordingsSync.Outcome?>(null) }
+    var running by remember { mutableStateOf(false) }
+    var granted by remember { mutableStateOf(com.constructionmanager.data.caroline.RecordingsSync.hasPermission(context)) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted = it }
+    var logGranted by remember { mutableStateOf(com.constructionmanager.data.caroline.CallLogSync.hasPermission(context)) }
+    val askLog = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { logGranted = it }
+    var logStatus by remember { mutableStateOf<com.google.gson.JsonObject?>(null) }
+    var logOutcome by remember { mutableStateOf<com.constructionmanager.data.caroline.CallLogSync.Outcome?>(null) }
+    val refresh: () -> Unit = { scope.launch { status = vm.readJson("calls/recordings/status"); logStatus = vm.readJson("calls/log/latest") } }
+    LaunchedEffect(Unit) { refresh() }
+    HoccCard("Your phone's calls") {
+        Text("The phone's call log gives every call its number, direction and length; every recording goes to the office, Caroline writes it out and files the lead, the meeting and what was said. You audit it on the board.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!logGranted) {
+            Text("This phone has not let the app read its call log yet - without it a recording named \"Spam Risk\" has no number.", style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = { askLog.launch(com.constructionmanager.data.caroline.CallLogSync.permission()) }) { Text("Allow reading the call log") }
+        } else {
+            logStatus?.let { Text("Call log on file: ${it.num("calls")?.toInt() ?: 0} calls" + (it.num("latest_started_ms")?.toLong()?.takeIf { ms -> ms > 0 }?.let { ms -> ", newest " + java.text.SimpleDateFormat("EEE MMM d, h:mm a", java.util.Locale.US).format(java.util.Date(ms)) } ?: ""), style = MaterialTheme.typography.bodyMedium) }
+            logOutcome?.let { o -> Text("Last send: ${o.landed} landed, ${o.duplicates} already there, ${o.matched} recordings given their number." + (if (o.note.isNotBlank()) " ${o.note}" else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = !running, onClick = { running = true; scope.launch { logOutcome = com.constructionmanager.data.caroline.CallLogSync.sync(context); running = false; refresh() } }) { Text("Send new calls now") }
+                TextButton(enabled = !running, onClick = { running = true; scope.launch { logOutcome = com.constructionmanager.data.caroline.CallLogSync.sync(context, everything = true); running = false; refresh() } }) { Text("Send the whole log") }
+            }
+        }
+        Text("Recordings", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        if (!granted) {
+            Text("This phone has not let the app read its call recordings yet.", style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = { ask.launch(com.constructionmanager.data.caroline.RecordingsSync.permission()) }) { Text("Allow reading the recordings") }
+        } else {
+            val onPhone = remember(granted) { com.constructionmanager.data.caroline.RecordingsSync.findRecordings(context).size }
+            Text("On this phone: $onPhone recordings in Recordings/Call.", style = MaterialTheme.typography.bodyMedium)
+        }
+        status?.let { s ->
+            Text("On file: ${s.num("recordings")?.toInt() ?: 0} · transcribed ${s.num("transcribed")?.toInt() ?: 0} · read by Caroline ${s.num("mined")?.toInt() ?: 0}" +
+                (s.num("failed")?.toInt()?.takeIf { it > 0 }?.let { " · $it failed" } ?: ""), style = MaterialTheme.typography.bodyMedium)
+            s.objOf("kinds")?.let { k -> Text(k.entrySet().joinToString(" · ") { (key, v) -> "${humanStatus(key)} ${v.asInt}" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        outcome?.let { o ->
+            Text("Last send: ${o.sent} sent, ${o.duplicates} already there, ${o.failed} failed of ${o.found} on the phone." + (if (o.note.isNotBlank()) " ${o.note}" else ""),
+                style = MaterialTheme.typography.bodySmall, color = if (o.failed > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = granted && !running, onClick = { running = true; scope.launch { outcome = com.constructionmanager.data.caroline.RecordingsSync.sync(context, everything = false); running = false; refresh() } }) { Text(if (running) "Sending…" else "Send new now") }
+            TextButton(enabled = granted && !running, onClick = { running = true; scope.launch { outcome = com.constructionmanager.data.caroline.RecordingsSync.sync(context, everything = true); running = false; refresh() } }) { Text("Send everything from the start") }
+        }
+        Text("New recordings also go on their own, hourly, whenever the phone has a connection.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
