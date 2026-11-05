@@ -787,7 +787,10 @@ private fun EstimatesCard(room: RoomViewModel, d: RoomData, writing: Boolean, fu
                 Lbl("${lines.size} lines")
                 lines.forEach { l ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(l.str("description", "item", "name") ?: "", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2)
+                        Column(Modifier.weight(1f)) {
+                            Text(l.str("description", "item", "name") ?: "", style = MaterialTheme.typography.bodySmall)
+                            l.str("note")?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Board.grey) }
+                        }
                         Num(money(l.num("cost", "total", "amount")) ?: "", 12)
                     }
                 }
@@ -968,7 +971,15 @@ private fun ScopeCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: 
     val tk = d.takeoff
     val tkId = tk?.num("id")?.toInt() ?: d.takeoffs?.rowsOf("takeoffs")?.objects()?.firstOrNull()?.num("id")?.toInt()
     val lines = tk?.rowsOf("lines")?.objects()?.ifEmpty { tk.arrOf("sections")?.objects()?.flatMap { s -> s.arrOf("lines")?.objects().orEmpty() }.orEmpty() }.orEmpty()
-    val bullets = if (lines.isNotEmpty()) lines.map { it.str("item", "description", "name") ?: "" } else (c?.str("scope") ?: "").split('\n').map { it.trim().trimStart('-', '•', '·').trim() }.filter { it.isNotBlank() }
+    // the scope as the job states it: the detailed scope's lines, else his written description, else the estimate's own lines
+    // (Nov 5 2026: an estimate's lines are its scope - a Houzz job has no takeoff and no description, and its scope is on the estimate)
+    val estLines = d.estimate?.asObjOrNull()?.rowsOf("lines")?.objects().orEmpty()
+    val written = (c?.str("scope") ?: "").split('\n').map { it.trim().trimStart('-', '•', '·').trim() }.filter { it.isNotBlank() }
+    val bullets = when {
+        lines.isNotEmpty() -> lines.map { it.str("item", "description", "name") ?: "" }
+        written.isNotEmpty() -> written
+        else -> estLines.map { l -> listOfNotNull(l.str("description", "item", "name"), l.num("qty")?.takeIf { it != 0.0 && it != 1.0 }?.let { q -> "${fmtQ(q)} ${l.str("unit") ?: ""}".trim() }).joinToString(" — ") }.filter { it.isNotBlank() }
+    }
     var editing by remember { mutableStateOf(false) }
     BoardCard {
         CardHead("Scope") { Tool("Edit") { if (full) editing = !editing else onOpen() } }
