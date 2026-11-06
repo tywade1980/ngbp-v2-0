@@ -27,11 +27,15 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      # setup-android's default package list is "tools platform-tools".
+      # The legacy "tools" package (SDK Tools 26.1.1) is no longer in Google's
+      # SDK repository, so the default makes sdkmanager exit 1 and the job
+      # dies before Gradle runs. Name exactly the packages this app builds
+      # with (compileSdk/targetSdk 34) instead of relying on that default.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
