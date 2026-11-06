@@ -202,9 +202,11 @@ private fun JobDetailView(vm: HoccViewModel, id: Int, onBack: () -> Unit) {
 fun ScheduleScreen(vm: HoccViewModel) {
     val state by vm.schedule.collectAsState()
     LaunchedEffect(Unit) { vm.loadSchedule() }
-    ScreenColumn(title = "Schedule", onRefresh = { vm.loadSchedule() }) {
+    ScreenColumn(title = "Schedule", onRefresh = { vm.loadSchedule(); vm.loadVisits() }) {
         if (state.loading && state.data == null) LoadingLine()
         state.error?.let { ErrorLine(it) { vm.loadSchedule() } }
+        // the booked visits as the record holds them - edit, cancel, book again (0.7.4, Tyler Nov 6 2026)
+        VisitsCard(vm)
         val d = state.data
         if (d != null) {
             val sheet = d.sheet

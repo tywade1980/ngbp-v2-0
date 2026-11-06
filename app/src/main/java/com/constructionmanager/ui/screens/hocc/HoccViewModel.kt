@@ -8,6 +8,7 @@ import com.constructionmanager.BuildConfig
 import com.constructionmanager.data.caroline.CallSummary
 import com.constructionmanager.data.caroline.CarolineConnector
 import com.constructionmanager.data.caroline.ConnectorResult
+import com.constructionmanager.data.caroline.RoomWriters
 import com.constructionmanager.data.location.LocationFix
 import com.constructionmanager.data.location.LocationReader
 import com.google.gson.JsonArray
@@ -84,7 +85,8 @@ data class LocationUiState(
  */
 @HiltViewModel
 class HoccViewModel @Inject constructor(
-    private val connector: CarolineConnector
+    private val connector: CarolineConnector,
+    private val writers: RoomWriters
 ) : ViewModel() {
 
     private val _hub = MutableStateFlow(SectionState<HubData>())
@@ -201,8 +203,8 @@ class HoccViewModel @Inject constructor(
 
     // ------------------------------------------------------------------ Jobs
 
-    fun loadJobs() {
-        if (_jobs.value.loading) return
+    fun loadJobs(force: Boolean = false) {
+        if (_jobs.value.loading && !force) return
         _jobs.value = _jobs.value.copy(loading = true, error = null)
         viewModelScope.launch {
             val projects = connector.getJson("projects")
@@ -378,6 +380,116 @@ class HoccViewModel @Inject constructor(
             }
         }
     }
+
+    // ------------------------------------------------------------------ edit, delete, archive, restore (Tyler, Nov 6 2026)
+    // His words: "Editing, deleting, archiving. Can't do any of it from anywhere yet." Every delete goes to the record's
+    // trash and comes back from the Trash card; archive keeps a record for good, off the active lists. A write is sent once
+    // (RoomWriters), then the list is read again - the answer is never taken as the state.
+
+    /** The last write's words - the office's own, a refusal included. */
+    data class OfficeNote(val text: String, val isError: Boolean)
+
+    private val _officeNote = MutableStateFlow<OfficeNote?>(null)
+    val officeNote = _officeNote.asStateFlow()
+
+    private val _officeBusy = MutableStateFlow(false)
+    val officeBusy = _officeBusy.asStateFlow()
+
+    fun clearOfficeNote() { _officeNote.value = null }
+
+    private fun officeWrite(block: suspend () -> ConnectorResult<JsonElement>, ok: String, then: () -> Unit) {
+        if (_officeBusy.value) return
+        _officeBusy.value = true
+        _officeNote.value = null
+        viewModelScope.launch {
+            _officeNote.value = when (val r = block()) {
+                is ConnectorResult.Ok -> OfficeNote(r.value.asObjOrNull()?.str("say") ?: ok, false)
+                is ConnectorResult.Failed -> OfficeNote(r.error.message, true)
+                is ConnectorResult.Queued -> OfficeNote("Queued on this phone; it sends when you're back in coverage.", false)
+            }
+            _officeBusy.value = false
+            then()
+        }
+    }
+
+    // ---- the client book (the hub contacts door: one card per phone)
+    private val _book = MutableStateFlow(SectionState<List<JsonObject>>())
+    val book = _book.asStateFlow()
+    private var bookQuery = ""
+
+    fun loadBook(q: String = bookQuery) {
+        bookQuery = q
+        _book.value = _book.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val r = connector.getJson("hub/contacts?q=" + android.net.Uri.encode(q.trim()))
+            _book.value = SectionState(loading = false, error = failedOf(r), data = r.valueOrNull()?.rowsOf("contacts")?.objects().orEmpty())
+        }
+    }
+
+    fun editContact(phone: String, name: String, email: String, address: String, need: String) {
+        val body = JsonObject().apply {
+            addProperty("name", name.trim()); addProperty("email", email.trim()); addProperty("address", address.trim())
+            if (need.isNotBlank()) addProperty("need", need.trim())
+        }
+        officeWrite({ writers.patch("hub/contacts/" + android.net.Uri.encode(phone), body) }, "Card saved.") { loadBook() }
+    }
+
+    fun archiveContact(phone: String, archive: Boolean) =
+        officeWrite({ writers.post("hub/contacts/" + android.net.Uri.encode(phone) + if (archive) "/archive" else "/unarchive", JsonObject()) },
+            if (archive) "Archived - off the active cards, kept on file." else "Back on the active cards.") { loadBook() }
+
+    fun deleteContact(phone: String) =
+        officeWrite({ writers.delete("hub/contacts/" + android.net.Uri.encode(phone)) }, "Card deleted - restore it from the Trash.") { loadBook(); loadTrash() }
+
+    // ---- the trash
+    private val _trash = MutableStateFlow(SectionState<List<JsonObject>>())
+    val trash = _trash.asStateFlow()
+
+    fun loadTrash() {
+        _trash.value = _trash.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val r = connector.getJson("trash?limit=100")
+            _trash.value = SectionState(loading = false, error = failedOf(r), data = r.valueOrNull()?.rowsOf("items")?.objects().orEmpty())
+        }
+    }
+
+    fun restoreFromTrash(trashId: Long) =
+        officeWrite({ writers.post("trash/$trashId/restore", JsonObject()) }, "Restored.") { loadTrash(); loadBook(); loadJobs(force = true) }
+
+    // ---- archived jobs: kept on the record, out of the lists; Reopen puts one back at the standing it had
+    fun reopenJob(projectId: Int) =
+        officeWrite({ writers.post("projects/$projectId/unarchive", JsonObject()) }, "Back on the active list.") { loadJobs(force = true) }
+
+    fun archiveJob(projectId: Int) =
+        officeWrite({ writers.post("projects/$projectId/archive", JsonObject()) }, "Archived - kept on the record.") { loadJobs(force = true) }
+
+    // ---- booked visits (the record's appointments, with their ids - the calendar copy follows every change)
+    private val _visits = MutableStateFlow(SectionState<List<JsonObject>>())
+    val visits = _visits.asStateFlow()
+
+    fun loadVisits() {
+        _visits.value = _visits.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val r = connector.getJson("visits?days=60&past_days=7")
+            _visits.value = SectionState(loading = false, error = failedOf(r), data = r.valueOrNull()?.rowsOf("visits")?.objects().orEmpty())
+        }
+    }
+
+    /** Edit a visit: send only what changed; nothing is required. start is "YYYY-MM-DD HH:MM" on this phone's clock. */
+    fun editVisit(id: Long, name: String?, phone: String?, address: String?, forWhat: String?, start: String?) {
+        val body = JsonObject().apply {
+            name?.let { addProperty("name", it) }; phone?.let { addProperty("phone", it) }
+            address?.let { addProperty("address", it) }; forWhat?.let { addProperty("project", it) }
+            start?.takeIf { it.isNotBlank() }?.let { addProperty("start", it) }
+        }
+        officeWrite({ writers.patch("visits/$id", body) }, "Visit updated.") { loadVisits() }
+    }
+
+    fun cancelVisit(id: Long) =
+        officeWrite({ writers.post("visits/$id/cancel", JsonObject()) }, "Visit cancelled.") { loadVisits() }
+
+    fun restoreVisit(id: Long) =
+        officeWrite({ writers.post("visits/$id/restore", JsonObject()) }, "Visit booked again.") { loadVisits() }
 
     /** Sign this phone out: the server revokes the token, the phone forgets it, and the front door comes back. */
     fun signOut(activity: Activity) {

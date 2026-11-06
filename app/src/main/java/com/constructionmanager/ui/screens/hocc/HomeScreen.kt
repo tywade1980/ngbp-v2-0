@@ -60,9 +60,17 @@ fun HomeScreen(vm: HoccViewModel, room: RoomViewModel, roomKey: RoomKey?, onOpen
             if (!jobs.loading && jobs.error == null && all.isEmpty()) EmptyLine("No jobs on file yet.")
         }
     } else {
-        JobRoomScreen(room, roomKey, all, onBack = null, onOpenRoom = onOpenRoom,
-            client = { phone, label, back, openProject -> ClientWheel(vm, phone, label, onBack = back, onOpenProject = openProject) },
-            readJson = { path -> vm.readJson(path) })
+        // a deleted job leaves nothing to show: read the jobs again and open the next open one (0.7.4)
+        val leave: () -> Unit = {
+            vm.loadJobs(force = true)
+            all.firstOrNull { it.boolOf("open") == true && it.num("id")?.toInt() !in roomKey.projectIds }?.num("id")?.toInt()
+                ?.let { onOpenRoom(oneJob(it, all.filter { p -> p.num("id")?.toInt() !in roomKey.projectIds })) }
+        }
+        androidx.compose.runtime.CompositionLocalProvider(LocalLeaveRoom provides leave) {
+            JobRoomScreen(room, roomKey, all, onBack = null, onOpenRoom = onOpenRoom,
+                client = { phone, label, back, openProject -> ClientWheel(vm, phone, label, onBack = back, onOpenProject = openProject) },
+                readJson = { path -> vm.readJson(path) })
+        }
     }
 }
 
