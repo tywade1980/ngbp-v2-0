@@ -198,6 +198,11 @@ fun OfficeScreen(vm: HoccViewModel) {
         }
 
 
+        // edit, delete, archive, restore (0.7.4, Tyler Nov 6 2026): the client cards, the archived jobs, the trash
+        ClientsBookCard(vm)
+        ArchivedJobsCard(vm)
+        TrashCard(vm)
+
         // his phone's call recordings -> the record (Tyler, Nov 3 2026)
         LocationCard()
         RecordingsCard(vm)

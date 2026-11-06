@@ -250,12 +250,77 @@ class RoomViewModel @Inject constructor(
         write(RoomCard.Logs.key, { writers.post("projects/$projectId/clock/out", JsonObject()) }) { r -> r.asObjOrNull()?.str("say", "note") ?: "Off the clock; the hours stand on the job." }
 
     fun editHours(entryId: Long, hours: String?, note: String?, remove: Boolean) {
+        if (remove) return deleteHours(entryId)
         val body = JsonObject().apply {
-            if (remove) addProperty("remove", true)
             if (hours != null) addProperty("hours", hours.toDoubleOrNull() ?: 0.0)
             if (note != null) addProperty("note", note)
         }
-        write(RoomCard.Logs.key, { writers.patch("hours/$entryId", body) }) { if (remove) "Entry removed." else "Entry corrected." }
+        write(RoomCard.Logs.key, { writers.patch("hours/$entryId", body) }) { "Entry corrected." }
+    }
+
+    // ------------------------------------------------------------------ delete and archive (Tyler, Nov 6 2026)
+    // Every delete below goes to the record's trash (the office's trash.py): Office > Trash puts it back exactly.
+    // The screen asks first (ConfirmDelete); the office's own guards still refuse what may not go, in their words.
+
+    private fun trashSay(r: JsonElement, fallback: String): String = r.asObjOrNull()?.str("say") ?: fallback
+
+    /** One hours entry -> the trash. */
+    fun deleteHours(entryId: Long) =
+        write(RoomCard.Logs.key, { writers.delete("hours/$entryId") }) { trashSay(it, "Entry deleted - restore it from Office > Trash.") }
+
+    /** A punch item's words. */
+    fun editTask(taskId: Long, title: String) =
+        write(RoomCard.Punch.key, { writers.patch("tasks/$taskId", JsonObject().apply { addProperty("title", title) }) }) { "Punch item saved." }
+
+    /** A punch item -> the trash. */
+    fun deleteTask(taskId: Long) =
+        write(RoomCard.Punch.key, { writers.delete("tasks/$taskId") }) { trashSay(it, "Punch item deleted - restore it from Office > Trash.") }
+
+    /** A selection / material line: its item, how many, the unit. Blank fields are left as they are. */
+    fun editMaterial(materialId: Long, item: String, qty: String, unit: String) {
+        val body = JsonObject().apply {
+            if (item.isNotBlank()) addProperty("item", item.trim())
+            qty.toDoubleOrNull()?.let { addProperty("qty", it) }
+            if (unit.isNotBlank()) addProperty("unit", unit.trim())
+        }
+        write(RoomCard.Selections.key, { writers.patch("materials/$materialId", body) }) { "Selection saved." }
+    }
+
+    /** A selection / material line logged by mistake -> the trash. */
+    fun deleteMaterial(materialId: Long) =
+        write(RoomCard.Selections.key, { writers.delete("materials/$materialId") }) { trashSay(it, "Selection deleted - restore it from Office > Trash.") }
+
+    /** A photo or file off this job: the file stays in the library, its place on the job goes to the trash. */
+    fun removePhoto(projectId: Int, itemId: String) =
+        write(RoomCard.Photos.key, { writers.delete("attachments/" + Uri.encode(itemId) + "?kind=project&ref=$projectId") }) { trashSay(it, "Taken off the job - restore it from Office > Trash.") }
+
+    /** A draft estimate -> the trash (the office refuses a sent or approved one, in its words). */
+    fun deleteEstimate(estimateId: Long) =
+        write(RoomCard.Estimate.key, { writers.delete("hub/estimates/$estimateId") }) { trashSay(it, "Estimate deleted - restore it from Office > Trash.") }
+
+    /** Archive the job: kept on the record for good, off the active lists, its standing remembered for Reopen. */
+    fun archiveJob(projectId: Int, reason: String = "") =
+        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/archive", JsonObject().apply { addProperty("reason", reason) }) }) { trashSay(it, "Archived - kept on the record.") }
+
+    /** Reopen an archived job at the standing it had. */
+    fun unarchiveJob(projectId: Int) =
+        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/unarchive", JsonObject()) }) { trashSay(it, "Back on the active list.") }
+
+    /** Delete the job -> the trash. Only a draft with nothing recorded under it deletes; anything else is refused with the
+     *  office's reason (its exit is Archive). On success the room has nothing left to show, so [onGone] leaves it. */
+    fun deleteJob(projectId: Int, onGone: () -> Unit) {
+        if (_busy.value != null) return
+        _busy.value = RoomCard.Vitals.key
+        _note.value = null
+        viewModelScope.launch {
+            when (val r = writers.delete("hub/projects/$projectId")) {
+                is ConnectorResult.Ok -> { _note.value = RoomNote(trashSay(r.value, "Job deleted - restore it from Office > Trash."), false); _busy.value = null; onGone(); return@launch }
+                is ConnectorResult.Failed -> _note.value = RoomNote(r.error.message, true)
+                is ConnectorResult.Queued -> _note.value = RoomNote("Queued on this phone.", false)
+            }
+            _busy.value = null
+            currentId?.let { read(it) }
+        }
     }
 
     /** Photo: the bytes of the picture to the attachments door, filed to this job. */

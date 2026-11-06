@@ -334,10 +334,11 @@ private fun OpenSpoke(name: String, words: String, onOpen: () -> Unit) {
 /** The clients: the leads that signed, by stage, newest first. */
 @Composable
 private fun ClientsPage(projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit) {
-    val signed = projects.filter { (it.str("status") ?: "").lowercase() in Board.SIGNED }
+    // archived jobs (status complete) leave the default view; they stay on the record under Office › Archived jobs (0.7.4)
+    val signed = projects.filter { (it.str("status") ?: "").lowercase() in Board.SIGNED && it.boolOf("done") != true }
     BoardCard {
         Disp("Clients", 24)
-        Text("The leads that signed: on site, on hold, punch list, done.", style = MaterialTheme.typography.bodySmall, color = Board.grey)
+        Text("The leads that signed: on site, on hold, punch list. Archived jobs are under Office › Archived jobs.", style = MaterialTheme.typography.bodySmall, color = Board.grey)
         if (signed.isEmpty()) EmptyLine("Nobody has signed yet.")
         Board.STAGE_ORDER.forEach { stage ->
             val rows = signed.filter { Board.stage(it.str("status"), it.boolOf("open")).first == stage }.sortedByDescending { it.num("id") ?: 0.0 }
@@ -648,6 +649,17 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                 if (st == "punch") Solid("Done", Board.ink, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.setStatus(d.id, "complete") }
                 Tool("Remove", !writing) { removing = !removing }
             }
+            // archive keeps the job for good, off the active lists; delete sends a draft to the trash (0.7.4, Tyler Nov 6 2026)
+            var confirmDelete by remember { mutableStateOf(false) }
+            val leave = LocalLeaveRoom.current
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (st == "complete") Tool("Reopen", !writing) { room.unarchiveJob(d.id) }
+                else Tool("Archive", !writing) { room.archiveJob(d.id) }
+                Tool("Delete job", !writing) { confirmDelete = true }
+            }
+            if (confirmDelete) ConfirmDelete("this job", body = "It goes to the trash with its draft estimates and scope - restore it from Office › Trash. " +
+                "Signed work or a job with hours, photos or money on it can't be deleted; archive it instead.",
+                onYes = { confirmDelete = false; room.deleteJob(d.id) { leave() } }, onNo = { confirmDelete = false })
             if (removing) {
                 var why by remember { mutableStateOf("") }
                 OutlinedTextField(why, { why = it }, label = { Text("Why it comes off the board (kept on file)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -780,6 +792,18 @@ private fun EstimatesCard(room: RoomViewModel, d: RoomData, writing: Boolean, fu
         if (mine.size > 1 && full) {
             Lbl("All versions")
             mine.sortedByDescending { it.num("version") ?: 0.0 }.forEach { e -> EstRow(listOfNotNull(e.str("title"), e.num("version")?.let { "v${it.toInt()}" }).joinToString(" · "), listOfNotNull(humanStatus(e.str("status")), money(e.num("col_total") ?: e.num("subtotal")), e.num("line_count")?.let { "${it.toInt()} lines" }).joinToString(" · ")) }
+        }
+        // a draft that never went out can be deleted (to the trash); a sent or approved one stays - the office says why (0.7.4)
+        if (full) {
+            val drafts = (if (mine.isNotEmpty()) mine else listOfNotNull(cur)).filter { (it.str("status") ?: "").lowercase() == "draft" && it.num("id") != null }
+            var confirm by remember { mutableStateOf<JsonObject?>(null) }
+            drafts.forEach { e ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Draft " + listOfNotNull(e.str("title"), e.num("version")?.let { "v${it.toInt()}" }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.grey, modifier = Modifier.weight(1f))
+                    Tool("Delete draft", !writing) { confirm = e }
+                }
+            }
+            confirm?.let { e -> ConfirmDelete("this draft estimate", onYes = { e.num("id")?.toLong()?.let { room.deleteEstimate(it) }; confirm = null }, onNo = { confirm = null }) }
         }
         if (full && cur != null) {
             val lines = cur.rowsOf("lines").objects()
@@ -924,7 +948,9 @@ private fun LogsCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: B
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Tool("Correct", !writing && hid != null) { if (hid != null) room.editHours(hid, hrs, nt, false); editing = false }
-                    Tool("Remove", !writing && hid != null) { if (hid != null) room.editHours(hid, null, null, true); editing = false }
+                    var confirm by remember(h) { mutableStateOf(false) }
+                    Tool("Delete", !writing && hid != null) { confirm = true }
+                    if (confirm && hid != null) ConfirmDelete("this hours entry", onYes = { room.deleteHours(hid); confirm = false; editing = false }, onNo = { confirm = false })
                 }
             }
         }
@@ -1048,7 +1074,9 @@ private fun TakeoffLineRow(room: RoomViewModel, l: JsonObject, writing: Boolean)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Tool("Save", !writing) { room.editTakeoffLine(lid, item, qty, unit, null); editing = false }
-            Tool("Remove", !writing) { room.deleteTakeoffLine(lid); editing = false }
+            var confirm by remember(l) { mutableStateOf(false) }
+            Tool("Delete", !writing) { confirm = true }
+            if (confirm) ConfirmDelete("this scope line", onYes = { room.deleteTakeoffLine(lid); confirm = false; editing = false }, onNo = { confirm = false })
         }
     }
 }
@@ -1082,6 +1110,7 @@ private fun SelectionsCard(room: RoomViewModel, d: RoomData, writing: Boolean, f
                             if (next != null && mid != null) Tool("→ ${humanStatus(next)}", !writing) { room.setMaterialStatus(mid, next) }
                         }
                         m.str("source_line")?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Board.grey) }
+                        if (mid != null) MaterialEdit(room, m, mid, writing)
                     }
                 }
             }
@@ -1146,6 +1175,12 @@ private fun PhotosCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     Text(a.str("title") ?: a.str("first_filename") ?: a.str("media_type") ?: "file", style = MaterialTheme.typography.bodySmall, color = Board.ink, maxLines = 2)
                     Text(listOfNotNull(a.str("last_at")?.let { serverTimeToLocal(it) ?: it }, a.str("last_source"), a.str("role")).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.grey)
                 }
+                // off this job (0.7.4): the file stays in the library; the trash puts it back on
+                var confirm by remember(a) { mutableStateOf(false) }
+                if (itemId.isNotBlank()) Tool("Remove", !writing) { confirm = true }
+                if (confirm) ConfirmDelete("this photo from the job", verb = "Remove",
+                    body = "It comes off this job; the file itself is kept. Restore it from Office › Trash.",
+                    onYes = { room.removePhoto(d.id, itemId); confirm = false }, onNo = { confirm = false })
             }
         }
     }
@@ -1177,12 +1212,49 @@ private fun PunchCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: 
 private fun TaskRow(room: RoomViewModel, t: JsonObject, writing: Boolean) {
     val tid = t.num("id")?.toLong()
     val done = t.str("status") == "Completed"
+    var editing by remember(t) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = done, onCheckedChange = { if (tid != null) room.flipTask(tid, it) }, enabled = !writing && tid != null)
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).clickable(enabled = tid != null) { editing = !editing }) {
             Text(t.str("title") ?: "", style = MaterialTheme.typography.bodyMedium, color = if (done) Board.grey else Board.ink)
             val sub = listOfNotNull(t.str("due_date")?.let { "due $it" }, t.str("phase")?.takeIf { it.isNotBlank() }, t.str("assignee")?.takeIf { it.isNotBlank() }).joinToString(" · ")
             if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = Board.grey)
         }
     }
+    if (editing && tid != null) {
+        var title by remember(t) { mutableStateOf(t.str("title") ?: "") }
+        var confirm by remember(t) { mutableStateOf(false) }
+        OutlinedTextField(title, { title = it }, label = { Text("Punch item") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Tool("Save", !writing && title.isNotBlank() && title != (t.str("title") ?: "")) { room.editTask(tid, title.trim()); editing = false }
+            Tool("Delete", !writing) { confirm = true }
+            Tool("Close") { editing = false }
+        }
+        if (confirm) ConfirmDelete("this punch item", onYes = { room.deleteTask(tid); confirm = false; editing = false }, onNo = { confirm = false })
+    }
 }
+
+/** A selection line, opened: fix its words, how many and the unit, or delete it (to the trash). */
+@Composable
+private fun MaterialEdit(room: RoomViewModel, m: JsonObject, mid: Long, writing: Boolean) {
+    var editing by remember(m) { mutableStateOf(false) }
+    var confirm by remember(m) { mutableStateOf(false) }
+    if (!editing) { Row { Tool("Edit") { editing = true } }; return }
+    var item by remember(m) { mutableStateOf(m.str("item") ?: "") }
+    var qty by remember(m) { mutableStateOf(m.num("qty")?.let { fmtQ(it) } ?: "") }
+    var unit by remember(m) { mutableStateOf(m.str("unit") ?: "") }
+    OutlinedTextField(item, { item = it }, label = { Text("Item") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedTextField(qty, { qty = it }, label = { Text("How many") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+        OutlinedTextField(unit, { unit = it }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Tool("Save", !writing) { room.editMaterial(mid, item, qty, unit); editing = false }
+        Tool("Delete", !writing) { confirm = true }
+        Tool("Close") { editing = false }
+    }
+    if (confirm) ConfirmDelete("this selection", onYes = { room.deleteMaterial(mid); confirm = false; editing = false }, onNo = { confirm = false })
+}
+
+/** Leaves the room after its job was deleted (the Home screen supplies it; elsewhere it does nothing). */
+val LocalLeaveRoom = androidx.compose.runtime.compositionLocalOf<() -> Unit> { {} }
