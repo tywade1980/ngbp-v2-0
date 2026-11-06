@@ -163,7 +163,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                     ex != null && data != null && id != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
                         CardFor(ex, room, data, busy, full = true, onOpen = {})
                     }
-                    board -> BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
+                    board -> BoardLayout(room, data, busy, projects, id, pick, readJson, onOpen = { expanded = it.key })
                     else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) { androidx.compose.runtime.key(wheel) {
                         // the phone: a wheel is three pages - left spoke, hub, right spoke - opened on the hub. Swipe or tap a name.
                         val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 1) { 3 }
@@ -176,7 +176,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                     // the rest; any child opened is a hub of its own. Everything within three taps of home.
                                     Wheel.HOME -> when (page) {
                                         0 -> { OpenSpoke("Leads", "Open the leads wheel: new callers on its left, the clients on its right, site visits below.") { open(Wheel.LEADS) }
-                                               LeadsPage(projects, id, pick, room, busy != null) }
+                                               LeadsPage(readJson, pick, room, busy != null) }
                                         1 -> if (data != null) {
                                             CardFor(RoomCard.Vitals, room, data, busy, false) { expanded = RoomCard.Vitals.key }
                                             CardFor(RoomCard.Caroline, room, data, busy, false) { expanded = RoomCard.Caroline.key }
@@ -195,7 +195,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                     }
                                     Wheel.LEADS -> when (page) {
                                         0 -> NewCallersPage(readJson)
-                                        1 -> { LeadsPage(projects, id, pick, room, busy != null); Lbl("Site visits", modifier = Modifier.padding(top = 4.dp)); VisitsStrip(readJson, 14) }
+                                        1 -> { LeadsPage(readJson, pick, room, busy != null); Lbl("Site visits", modifier = Modifier.padding(top = 4.dp)); VisitsStrip(readJson, 14) }
                                         else -> ClientsPage(projects, id, pick)
                                     }
                                     Wheel.ESTIMATES -> if (data != null) when (page) {
@@ -390,26 +390,37 @@ private fun HeaderBar(openCount: Int, board: Boolean, onBack: (() -> Unit)?, onL
     }
 }
 
-// ------------------------------------------------------------------ the leads page: every lead by where it stands in its life; clients are the ones that signed
+// ------------------------------------------------------------------ the leads page: the Leads board (Houzz Pro's shape, Nov 6 2026)
+// Tyler, Nov 6 2026: "a lead has one path forward. Other than that, it's a brief description of what the people wanted."
+// A lead is its own record (GET leads), not a job: no Project page, no Estimate page. What they want leads each card, then who,
+// where and how long ago, then the one next step. "They signed" turns it into a job and opens the job. Off-the-board leads are
+// kept and come back with a tap; finished jobs never show here.
 
 @Composable
-private fun LeadsPage(projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit, room: RoomViewModel? = null, writing: Boolean = false) {
+private fun LeadsPage(readJson: (suspend (String) -> JsonObject?)?, onPick: (RoomKey) -> Unit, room: RoomViewModel? = null, writing: Boolean = false) {
     var q by rememberSaveable { mutableStateOf("") }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var showKept by rememberSaveable { mutableStateOf(false) }
+    var board by remember { mutableStateOf<JsonObject?>(null) }
+    var unreadable by remember { mutableStateOf(false) }
+    val tick = room?.leadsTick?.collectAsState()?.value ?: 0
+    LaunchedEffect(tick, showKept) {
+        val r = readJson?.invoke(if (showKept) "leads?all=1" else "leads")
+        if (r != null) board = r
+        unreadable = r == null
+    }
     val digits = q.filter { it.isDigit() }
     val query = q.trim().lowercase()
-    // a lead that signed is a client's project and leaves this page for the Clients spoke (Tyler, Nov 4 2026: "when a lead
-    // converts to a project the lead card converts as well and should move from the leads list")
-    val shown = projects.filter { p ->
-        val st = (p.str("status") ?: "").lowercase()
-        st !in Board.SIGNED && st != "cancelled" && st != "complete" && st != "declined" && st !in setOf("done", "completed", "closed", "archived", "paid", "canceled")
-    }.filter { p ->
-        query.isEmpty() || listOfNotNull(p.str("client_name", "client"), p.str("name"), p.str("address")).any { it.lowercase().contains(query) } ||
-            (digits.length >= 3 && (p.str("client_phone", "phone") ?: "").filter { it.isDigit() }.contains(digits))
+    val all = board?.arrOf("leads")?.objects().orEmpty()
+    val shown = all.filter { l ->
+        query.isEmpty() || listOfNotNull(l.str("name"), l.str("what_they_want"), l.str("address")).any { it.lowercase().contains(query) } ||
+            (digits.length >= 3 && (l.str("phone") ?: "").filter { it.isDigit() }.contains(digits))
     }
+    val kept = board?.num("kept_out_of_view")?.toInt() ?: 0
     BoardCard {
-        // the title on its own line, the one button under it (Tyler, Nov 4 2026: "the only thing needed there is the add lead button")
         Disp("Leads", 24)
+        val open = all.count { it.boolOf("archived") != true }
+        Text("$open open" + (if (kept > 0) " · $kept kept off the board" else ""), style = MaterialTheme.typography.bodySmall, color = Board.grey)
         if (room != null) Solid("+ New lead", Board.blue, modifier = Modifier.heightIn(min = 36.dp)) { adding = !adding }
         if (adding && room != null) {
             var name by remember { mutableStateOf("") }
@@ -417,32 +428,97 @@ private fun LeadsPage(projects: List<JsonObject>, currentId: Int?, onPick: (Room
             var address by remember { mutableStateOf("") }
             var need by remember { mutableStateOf("") }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Board.tile).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(need, { need = it }, label = { Text("What they want") }, modifier = Modifier.fillMaxWidth(), maxLines = 4)
                 OutlinedTextField(name, { name = it }, label = { Text("Who") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(phone, { phone = it }, label = { Text("Phone") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(address, { address = it }, label = { Text("Address") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(need, { need = it }, label = { Text("What they need") }, modifier = Modifier.fillMaxWidth(), maxLines = 4)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Solid("Put it on file", Board.blue, enabled = !writing && (name.isNotBlank() || address.isNotBlank())) {
-                        room.newLead(name.trim(), phone.trim(), address.trim(), need.trim()) { nid -> onPick(RoomKey(RoomKey.JOB, address.ifBlank { name }, listOf(nid), nid)) }
+                    // nothing is required: a lead saves with whatever is known, and the card names what is missing
+                    Solid("Put it on the board", Board.blue, enabled = !writing) {
+                        room.newLead(name.trim(), phone.trim(), address.trim(), need.trim()) { }
                         adding = false
                     }
                     Tool("Cancel") { adding = false }
                 }
             }
         }
-        OutlinedTextField(q, { q = it }, placeholder = { Text("Find a name, an address or a phone number") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(q, { q = it }, placeholder = { Text("Find a name, what they want, an address or a number") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Board.blue, unfocusedBorderColor = Board.toolBorder))
-        val groups = shown.groupBy { Board.stage(it.str("status"), it.boolOf("open")) }
-        Board.STAGE_ORDER.forEach { stageName ->
-            val entry = groups.entries.firstOrNull { it.key.first == stageName } ?: return@forEach
-            val (stage, rows) = entry
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(9.dp).clip(CircleShape).background(stage.second))
-                Lbl(stage.first + " · ${rows.size}")
+        when {
+            readJson == null -> EmptyLine("Not available here.")
+            board == null && unreadable -> EmptyLine("The office didn't answer. Pull to read again.")
+            board == null -> LoadingLine("Reading the leads…")
+            else -> {
+                val stages = board?.arrOf("stages")?.objects().orEmpty().mapNotNull { st -> st.str("stage")?.let { it to (st.str("label") ?: it) } }
+                stages.filter { it.first != "Won" }.forEach { (stage, label) ->
+                    val rows = shown.filter { it.str("stage") == stage && it.boolOf("archived") != true }
+                    if (rows.isNotEmpty()) {
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(Board.green))
+                            Lbl(label + " · ${rows.size}")
+                        }
+                        rows.forEach { l -> LeadCard(l, room, writing, onPick) }
+                    }
+                }
+                val offBoard = shown.filter { it.boolOf("archived") == true || it.str("stage") == "Won" }
+                if (showKept && offBoard.isNotEmpty()) {
+                    Lbl("Kept off the board · ${offBoard.size}", modifier = Modifier.padding(top = 8.dp))
+                    offBoard.forEach { l -> LeadCard(l, room, writing, onPick) }
+                }
+                if (shown.isEmpty()) EmptyLine(if (query.isEmpty()) "No open leads." else "No lead matches that.")
+                if (kept > 0 || showKept) Tool(if (showKept) "Hide the kept ones" else "Show the $kept kept off the board") { showKept = !showKept }
             }
-            rows.sortedByDescending { it.str("updated_at") ?: it.str("created_at") ?: "" }.forEach { p -> LeadRow(p, p.num("id")?.toInt() == currentId, onPick) }
         }
-        if (shown.isEmpty()) EmptyLine(if (query.isEmpty()) "No leads on file." else "Nobody on file matches that.")
+    }
+}
+
+/** One lead: what they want first, then who and the number, then where, where it came from and how long ago, then the one next step. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun LeadCard(l: JsonObject, room: RoomViewModel?, writing: Boolean, onPick: (RoomKey) -> Unit) {
+    val id = l.num("id")?.toInt() ?: return
+    val openClient = LocalOpenClient.current
+    val want = l.str("what_they_want")
+    val phone = l.str("phone")
+    val archived = l.boolOf("archived") == true
+    var editing by remember { mutableStateOf(false) }
+    var notALead by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Board.tile).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(want ?: "What they want isn't on file yet", style = MaterialTheme.typography.titleSmall, color = if (want != null) Board.ink else Board.grey, maxLines = 4)
+        Text(listOfNotNull(l.str("name"), prettyPhone(phone)).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = Board.ink)
+        val age = l.num("days_since_contact")?.toInt()?.let { d -> if (d <= 0) "today" else if (d == 1) "1 day ago" else "$d days ago" }
+        Text(listOfNotNull(l.str("address") ?: "no address yet", l.str("source"), age).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.grey, maxLines = 2)
+        if (archived) Text("Off the board: " + (l.str("archive_reason") ?: "kept").lowercase(), style = MaterialTheme.typography.bodySmall, color = Board.grey)
+        if (room != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val next = l.objOf("next_step")
+            val to = next?.str("to")
+            if (!archived && next != null && to != null) {
+                Solid(next.str("label") ?: to, if (to == "Won") Board.green else Board.blue, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) {
+                    room.leadStep(id, to) { pid -> onPick(RoomKey(RoomKey.JOB, l.str("address") ?: l.str("name") ?: "Job", listOf(pid), pid)) }
+                }
+            }
+            if (archived) Tool("Put it back on the board", enabled = !writing) { room.leadBack(id) }
+            else Tool("Not a lead", enabled = !writing) { notALead = !notALead }
+            Tool(if (want == null) "Add what they want" else "Edit what they want", enabled = !writing) { editing = !editing }
+            if (phone != null) Tool("Calls and texts") { openClient(phone, l.str("name")) }
+        }
+        if (editing && room != null) {
+            var text by remember { mutableStateOf(want ?: "") }
+            OutlinedTextField(text, { text = it }, label = { Text("What they want") }, modifier = Modifier.fillMaxWidth(), maxLines = 5)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Solid("Save", Board.blue, enabled = !writing) { room.leadWants(id, text.trim()); editing = false }
+                Tool("Cancel") { editing = false }
+            }
+        }
+        if (notALead && room != null) {
+            // kept on file either way; the reason says why it left the board
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Spam" to "SPAM", "Not a fit" to "NOT A FIT", "No answer" to "UNRESPONSIVE", "Already a client" to "NOT A LEAD",
+                       "Another contractor" to "NOT A LEAD", "Duplicate" to "DUPLICATE", "Lost it" to "LOST").forEach { (label, code) ->
+                    Tool(label, enabled = !writing) { room.leadArchive(id, code); notALead = false }
+                }
+            }
+        }
     }
 }
 
@@ -467,10 +543,11 @@ private fun LeadRow(p: JsonObject, cur: Boolean, onPick: (RoomKey) -> Unit) {
 // ------------------------------------------------------------------ opened: the whole board on one screen - leads | the job and Caroline | the estimate and what hangs off it; scheduling across the bottom
 
 @Composable
-private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit, onOpen: (RoomCard) -> Unit) {
+private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit,
+                        readJson: (suspend (String) -> JsonObject?)?, onOpen: (RoomCard) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.weight(1f)) { LeadsPage(projects, currentId, onPick, room, busy != null) }
+            Column(Modifier.weight(1f)) { LeadsPage(readJson, onPick, room, busy != null) }
             Column(Modifier.weight(2.1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (d != null) {
                     CardFor(RoomCard.Vitals, room, d, busy, false) { onOpen(RoomCard.Vitals) }
