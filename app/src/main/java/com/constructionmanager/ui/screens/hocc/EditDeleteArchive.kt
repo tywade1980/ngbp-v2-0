@@ -64,6 +64,7 @@ fun OfficeNoteLine(vm: HoccViewModel) {
 
 // ------------------------------------------------------------------ the client book: find a card, edit it, archive it, delete it
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ClientsBookCard(vm: HoccViewModel) {
     val state by vm.book.collectAsState()
