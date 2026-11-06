@@ -199,6 +199,7 @@ fun OfficeScreen(vm: HoccViewModel) {
 
 
         // his phone's call recordings -> the record (Tyler, Nov 3 2026)
+        LocationCard()
         RecordingsCard(vm)
         if (d != null) {
             val estimates = (d.estimates?.rowsOf("estimates", "rows", "items") ?: com.google.gson.JsonArray()).objects()
@@ -298,5 +299,44 @@ private fun RecordingsCard(vm: HoccViewModel) {
             TextButton(enabled = granted && !running, onClick = { running = true; scope.launch { outcome = com.constructionmanager.data.caroline.RecordingsSync.sync(context, everything = true); running = false; refresh() } }) { Text("Send everything from the start") }
         }
         Text("New recordings also go on their own, hourly, whenever the phone has a connection.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/*
+ * WHERE YOU ARE (0.7.3, Tyler Nov 6 2026). Three of his taps, in Android's order: location while using the app, then "Allow all the
+ * time" on the app's permission page (Android 11+ will not ask that in a dialog), then "don't put this app to sleep". The card reads
+ * back what Android says is granted - it never claims a grant it cannot see.
+ */
+@Composable
+private fun LocationCard() {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val LS = com.constructionmanager.data.location.LocationSync
+    var fg by remember { mutableStateOf(LS.hasForeground(context)) }
+    var bg by remember { mutableStateOf(LS.hasBackground(context)) }
+    var awake by remember { mutableStateOf(LS.ignoresBatteryLimits(context)) }
+    var note by remember { mutableStateOf<String?>(null) }
+    val askFg = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { fg = LS.hasForeground(context) }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) { fg = LS.hasForeground(context); bg = LS.hasBackground(context); awake = LS.ignoresBatteryLimits(context) }
+        }
+        lifecycle.lifecycle.addObserver(obs)
+        onDispose { lifecycle.lifecycle.removeObserver(obs) }
+    }
+    HoccCard("Where you are") {
+        Text("Caroline uses your phone's location to know which job you're at and the weather where you'll be. With all three on, the phone sends a fix every 15 minutes even with the app closed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text((if (fg) "✓ " else "1. ") + "Location while using the app", style = MaterialTheme.typography.bodyMedium)
+        if (!fg) Button(onClick = { askFg.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text("Allow location") }
+        Text((if (bg) "✓ " else "2. ") + "Location all the time", style = MaterialTheme.typography.bodyMedium)
+        if (fg && !bg) {
+            Text("Android asks this one on the app's own page: tap Permissions, then Location, then Allow all the time.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = { context.startActivity(LS.appSettingsIntent(context)) }) { Text("Open the app's settings") }
+        }
+        Text((if (awake) "✓ " else "3. ") + "Don't put the app to sleep", style = MaterialTheme.typography.bodyMedium)
+        if (!awake) Button(onClick = { runCatching { context.startActivity(LS.batteryIntent(context)) }.onFailure { context.startActivity(LS.appSettingsIntent(context)) } }) { Text("Keep the app awake") }
+        if (fg) TextButton(onClick = { scope.launch { note = LS.sendOnce(context).let { if (it.sent) "Sent your location to Caroline just now." else it.note } } }) { Text("Send my location now") }
+        note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }

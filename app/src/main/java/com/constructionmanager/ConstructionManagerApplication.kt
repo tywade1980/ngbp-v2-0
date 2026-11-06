@@ -13,5 +13,7 @@ class ConstructionManagerApplication : Application() {
         FirebaseInit.ensureInitialized(this)
         // his phone's call recordings to the record, hourly (Tyler, Nov 3 2026); runs only once the phone is paired and allowed to read them
         runCatching { RecordingsSync.schedule(this) }
+        // where he is, every 15 minutes with the app closed, plus his calls on the same tick (Tyler, Nov 6 2026); sends nothing without the grant
+        runCatching { com.constructionmanager.data.location.LocationSync.schedule(this) }
     }
 }

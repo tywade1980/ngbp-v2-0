@@ -10,6 +10,10 @@
     <!-- Site reads the phone's fix and posts it to the record (runtime request in HubSiteScreens / HomeScreen; LocationReader) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Where he is with the app closed: one fix every 15 minutes (LocationSync, 0.7.3). His "Allow all the time" tap in Android's settings -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Lets him tell Android not to put the app to sleep, so the 15-minute job keeps running (sideload build; Android's own dialog) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Photo Documentation takes pictures (runtime request in PhotoDocumentationScreen) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Call recordings sync (runtime request in CarolineOfficeScreens; RecordingsSync). READ_EXTERNAL_STORAGE is its API <= 32 form -->
