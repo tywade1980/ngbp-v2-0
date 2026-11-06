@@ -22,6 +22,8 @@ class ManifestAndConfigTest {
                 "CAMERA",                                         // job photos (PhotoDocumentationScreen, JobRoomScreen)
                 "REQUEST_INSTALL_PACKAGES",                       // OTA self-update (ApkInstaller)
                 "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", // Site fix (LocationReader, 0.5.0)
+                "ACCESS_BACKGROUND_LOCATION",                     // a fix every 15 minutes with the app closed (LocationSync, 0.7.3)
+                "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",           // keeps that job from being put to sleep (LocationSync, 0.7.3)
                 "READ_CALL_LOG",                                  // call log sync (CallLogSync, 0.7.1)
                 "READ_MEDIA_AUDIO", "READ_EXTERNAL_STORAGE",      // call recordings (RecordingsSync, 0.7.1; the latter to API 32)
             ),
