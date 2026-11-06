@@ -108,10 +108,15 @@ fun SiteHoursCard(d: RoomData, full: Boolean, onOpen: () -> Unit) {
     val days = sheet.days
     BoardCard {
         CardHead("Job site hours") { if (!full && days.isNotEmpty()) Tool("Open sheet") { onOpen() } }
-        if (days.isEmpty()) {
-            Dashed("No days on site for this job yet. Days from your location history land here as soon as they are matched to this job's address; hours you clock or log here land here too.")
-            return@BoardCard
-        }
+        if (days.isEmpty()) Dashed("No days on site for this job yet. Days from your location history land here as soon as they are matched to this job's address; hours you clock or log here land here too.")
+        else SiteHoursBody(sheet, full)
+    }
+}
+
+@Composable
+private fun SiteHoursBody(sheet: SiteSheet, full: Boolean) {
+    val days = sheet.days
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val st = sheet.stats
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat("On site", st?.str("time") ?: hrs(days.sumOf { it.hours }), Modifier.weight(1f))

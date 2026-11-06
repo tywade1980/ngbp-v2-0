@@ -495,7 +495,8 @@ private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projec
     // photos down the right. Under them, the job's file around the same centre (Nov 6: "each will be a peripheral card around that center
     // card"): job site hours | call log | texts, then the punch list | recordings.
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp)) {
-        if (d == null) { Spacer(Modifier.height(24.dp)); return@Column }
+        // no early return out of this inline Column (it unbalances the composer's groups on this Compose version)
+        if (d != null) {
         val cards = listOf(
             RoomCard.Estimate to Area(0, 0), RoomCard.Vitals to Area(1, 0, 2), RoomCard.Scope to Area(2, 0),
             RoomCard.Schedule to Area(0, 1), RoomCard.Selections to Area(2, 1),
@@ -505,6 +506,7 @@ private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projec
         )
         HubGrid(cards.map { it.second }, modifier = Modifier.fillMaxWidth()) {
             cards.forEach { (c, _) -> Box { CardFor(c, room, d, busy, false) { onOpen(c) } } }
+        }
         }
         Spacer(Modifier.height(24.dp))
     }
