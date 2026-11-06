@@ -283,6 +283,7 @@ fun FollowUpPeek(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewMod
 @Composable
 fun FollowUpPage(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewModel, onClose: () -> Unit, onOpenSheet: (String) -> Unit = {}) {
     var data by remember { mutableStateOf<JsonObject?>(null) }
+    var items by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var unreadable by remember { mutableStateOf(false) }
     val tick by room.leadsTick.collectAsState()
     val busy by room.busy.collectAsState()
@@ -291,6 +292,9 @@ fun FollowUpPage(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewMod
         val r = readJson?.invoke("followups")
         if (r != null) data = r
         unreadable = r == null
+        // his other open Wade Custom Carpentry items (client concerns, material delays, approvals, held messages, errands),
+        // ranked the same way; folded into one list with the people
+        items = readJson?.invoke("followups/items?entity=wcc")?.arrOf("items")?.objects().orEmpty()
         // the ones that moved since Caroline last weighed them get weighed again, once per open of the page
         if (r != null && !askedRank && (r.num("unranked")?.toInt() ?: 0) > 0) { askedRank = true; room.followRank() }
     }
@@ -300,7 +304,7 @@ fun FollowUpPage(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewMod
             Disp("Follow up", 20, modifier = Modifier.weight(1f))
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val people = data?.arrOf("people")?.objects().orEmpty()
+            val people = rankedTogether(data?.arrOf("people")?.objects().orEmpty(), items)
             Text("Ranked by Caroline: who needs you most, and why. Pin anyone up or down; your pin wins. " +
                 "Call and Text use your phone; nobody is called unless you send her.", style = MaterialTheme.typography.bodySmall, color = Board.grey)
             when {
@@ -308,7 +312,7 @@ fun FollowUpPage(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewMod
                 data == null && unreadable -> EmptyLine("The office didn't answer. Go back and open it again.")
                 data == null -> LoadingLine("Reading who's waiting…")
                 people.isEmpty() -> EmptyLine("Nobody is waiting on you.")
-                else -> people.forEachIndexed { i, p -> FollowCard(i + 1, p, room, busy != null) }
+                else -> people.forEachIndexed { i, p -> if (p.has("source_id")) ItemCard(i + 1, p, room, busy != null) else FollowCard(i + 1, p, room, busy != null) }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -362,6 +366,64 @@ private fun FollowCard(n: Int, p: JsonObject, room: RoomViewModel, writing: Bool
             if (pin != "up") Tool("Pin to top", !writing) { room.followPin(id, "up") }
             if (pin != "down") Tool("Move to bottom", !writing) { room.followPin(id, "down") }
             if (pin != null) Tool("Unpin", !writing) { room.followPin(id, "none") }
+        }
+    }
+}
+
+
+/** One ranked list: his pins first, then Caroline's score high to low, then the unranked, then his pins down. */
+private fun rankedTogether(people: List<JsonObject>, items: List<JsonObject>): List<JsonObject> {
+    val all = people + items
+    val pos = all.withIndex().associate { (i, o) -> System.identityHashCode(o) to i }
+    fun pinOrder(o: JsonObject) = when (o.objOf("rank")?.str("pin")) { "up" -> 0; "down" -> 2; else -> 1 }
+    return all.sortedWith(compareBy<JsonObject>({ pinOrder(it) }, { -(it.objOf("rank")?.num("score") ?: -1.0) }, { pos[System.identityHashCode(it)] ?: 0 }))
+}
+
+/** One of his other open items (not a lead): what it is, who, why Caroline put it here, and the same buttons. */
+@Composable
+private fun ItemCard(n: Int, p: JsonObject, room: RoomViewModel, writing: Boolean) {
+    val context = LocalContext.current
+    val id = p.str("id")
+    val phone = p.str("phone")
+    val rank = p.objOf("rank")
+    val pin = rank?.str("pin")
+    var noting by remember { mutableStateOf(false) }
+    BoardCard(strong = if (pin == "up") Board.rust else null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$n", style = MaterialTheme.typography.titleMedium, color = Board.rust, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(p.str("who") ?: p.str("job") ?: "No name on it", style = MaterialTheme.typography.titleSmall, color = Board.ink)
+                Text(p.str("title") ?: "", style = MaterialTheme.typography.labelLarge, color = Board.blue, maxLines = 3)
+            }
+            rank?.num("score")?.toInt()?.let { Text("$it", style = MaterialTheme.typography.labelLarge, color = Board.grey) }
+        }
+        p.str("job")?.takeIf { it.isNotBlank() && it != p.str("who") }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Board.grey) }
+        (rank?.str("why") ?: p.str("reason"))?.takeIf { it.isNotBlank() }?.let {
+            Text((if (rank?.str("by") == "Tyler") "You: " else "Caroline: ") + it, style = MaterialTheme.typography.bodySmall, color = Board.ink)
+        }
+        val last = listOfNotNull(p.str("since")?.let { "Since " + whenShort(it) }, p.str("last_touched")?.let { "last touched " + whenShort(it) }).joinToString(" · ")
+        if (last.isNotBlank()) Text(last, style = MaterialTheme.typography.labelSmall, color = Board.grey)
+        p.str("last_note")?.takeIf { it.isNotBlank() }?.let { Text("Last note: $it", style = MaterialTheme.typography.bodySmall, color = Board.grey, maxLines = 2) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!phone.isNullOrBlank()) {
+                Solid("Call", Board.blue) { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
+                Solid("Text", Board.blue) { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone"))) }
+            }
+            if (id != null) Tool("Called", !writing) { noting = !noting }
+            if (id != null) Tool("Done", !writing) { room.itemAct(id, "done") }
+        }
+        if (noting && id != null) {
+            var note by remember { mutableStateOf("") }
+            OutlinedTextField(note, { note = it }, label = { Text("How it went (optional)") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Solid("Save", Board.blue, enabled = !writing) { room.itemAct(id, "called", note = note.trim()); noting = false }
+                Tool("Cancel") { noting = false }
+            }
+        }
+        if (id != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (pin != "up") Tool("Pin to top", !writing) { room.itemAct(id, "pin", pin = "up") }
+            if (pin != "down") Tool("Move to bottom", !writing) { room.itemAct(id, "pin", pin = "down") }
+            if (pin != null) Tool("Unpin", !writing) { room.itemAct(id, "pin", pin = "none") }
         }
     }
 }

@@ -463,6 +463,15 @@ class RoomViewModel @Inject constructor(
         leadWrite("leads/$leadId/rank", JsonObject().apply { addProperty("pin", pin) },
             { when (pin) { "up" -> "Pinned to the top."; "down" -> "Moved to the bottom."; else -> "Back in Caroline's order." } })
 
+    /** Follow-up: one of his other open items - called (with a note), done, or pinned up / down / none. */
+    fun itemAct(itemId: String, action: String, note: String = "", pin: String? = null) =
+        leadWrite("followups/items/" + Uri.encode(itemId), JsonObject().apply {
+            addProperty("action", action)
+            if (note.isNotBlank()) addProperty("note", note)
+            if (pin != null) addProperty("pin", pin)
+        }, { when (action) { "called" -> "Saved: you called."; "done" -> "Done - off the list, kept on file."
+                             else -> when (pin) { "up" -> "Pinned to the top."; "down" -> "Moved to the bottom."; else -> "Back in Caroline's order." } } })
+
     /** Follow-up: Caroline weighs again the people whose standing moved since her last read (NeuroRank). */
     fun followRank() =
         leadWrite("followups/rank", JsonObject(), { r -> r.asObjOrNull()?.num("ranked")?.toInt()?.takeIf { it > 0 }?.let { "Caroline re-ranked $it." } ?: "Ranked." })
