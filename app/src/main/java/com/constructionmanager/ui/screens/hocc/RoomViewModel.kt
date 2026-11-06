@@ -202,13 +202,23 @@ class RoomViewModel @Inject constructor(
 
     // ------------------------------------------------------------------ the writers
 
-    private fun write(cardKey: String, block: suspend () -> ConnectorResult<JsonElement>, okText: (JsonElement) -> String) {
+    // Bumped whenever a write changes a job's standing (status, archive, remove, reopen): the job lists (Clients, Leads, the
+    // header count, the room's own wheel) read the jobs again, so a job taken out of view leaves it at once (Tyler, Nov 6 2026:
+    // "when something is deleted, removed, archived... It just gets out of my view").
+    private val _jobsChanged = MutableStateFlow(0)
+    val jobsChanged = _jobsChanged.asStateFlow()
+
+    private fun write(cardKey: String, block: suspend () -> ConnectorResult<JsonElement>, after: (() -> Unit)? = null, okText: (JsonElement) -> String) {
         if (_busy.value != null) return
         _busy.value = cardKey
         _note.value = null
         viewModelScope.launch {
             when (val r = block()) {
-                is ConnectorResult.Ok -> _note.value = RoomNote(okText(r.value), false)
+                is ConnectorResult.Ok -> {
+                    _note.value = RoomNote(okText(r.value), false)
+                    if (cardKey == RoomCard.Vitals.key) _jobsChanged.value = _jobsChanged.value + 1
+                    after?.invoke()
+                }
                 is ConnectorResult.Failed -> _note.value = RoomNote(r.error.message, true)
                 is ConnectorResult.Queued -> _note.value = RoomNote("Queued on this phone; it sends when you're back in coverage.", false)
             }
@@ -299,8 +309,8 @@ class RoomViewModel @Inject constructor(
         write(RoomCard.Estimate.key, { writers.delete("hub/estimates/$estimateId") }) { trashSay(it, "Estimate deleted - restore it from Office > Trash.") }
 
     /** Archive the job: kept on the record for good, off the active lists, its standing remembered for Reopen. */
-    fun archiveJob(projectId: Int, reason: String = "") =
-        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/archive", JsonObject().apply { addProperty("reason", reason) }) }) { trashSay(it, "Archived - kept on the record.") }
+    fun archiveJob(projectId: Int, reason: String = "", onGone: (() -> Unit)? = null) =
+        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/archive", JsonObject().apply { addProperty("reason", reason) }) }, onGone) { trashSay(it, "Archived - kept on the record.") }
 
     /** Reopen an archived job at the standing it had. */
     fun unarchiveJob(projectId: Int) =
@@ -434,12 +444,35 @@ class RoomViewModel @Inject constructor(
     fun leadWants(leadId: Int, text: String) =
         leadWrite("leads/$leadId/update", JsonObject().apply { addProperty("description", text) }, { "Saved what they want." })
 
+    /** The call sheet (CallSheet.kt): fill, change or clear blanks. Nothing is required; an empty value clears the blank. */
+    fun sheetSave(callId: String, fields: Map<String, String>) =
+        leadWrite("calls/$callId/sheet", JsonObject().apply { add("fields", JsonObject().apply { fields.forEach { (k, v) -> addProperty(k, v) } }) },
+            { "Saved on the call sheet." })
+
+    /** A new call sheet for a call with no recording (one he took himself, a walk-in). Saves with whatever is filled in. */
+    fun sheetNew(fields: Map<String, String>, onMade: (String) -> Unit) =
+        leadWrite("calls/sheets", JsonObject().apply { add("fields", JsonObject().apply { fields.forEach { (k, v) -> addProperty(k, v) } }) },
+            { "Call sheet started." }) { r -> r.asObjOrNull()?.str("call_id")?.let(onMade) }
+
+    /** Follow-up: he called them (from his phone); saved in the office with any note. */
+    fun followCalled(leadId: Int, note: String) =
+        leadWrite("leads/$leadId/called", JsonObject().apply { addProperty("note", note) }, { "Saved: you called." })
+
+    /** Follow-up: his pin wins over Caroline's rank - up, down or none. */
+    fun followPin(leadId: Int, pin: String) =
+        leadWrite("leads/$leadId/rank", JsonObject().apply { addProperty("pin", pin) },
+            { when (pin) { "up" -> "Pinned to the top."; "down" -> "Moved to the bottom."; else -> "Back in Caroline's order." } })
+
+    /** Follow-up: Caroline weighs again the people whose standing moved since her last read (NeuroRank). */
+    fun followRank() =
+        leadWrite("followups/rank", JsonObject(), { r -> r.asObjOrNull()?.num("ranked")?.toInt()?.takeIf { it > 0 }?.let { "Caroline re-ranked $it." } ?: "Ranked." })
+
     /** Award: the lead signed - status approved, the record's word for it. */
     fun award(projectId: Int) = setStatus(projectId, "approved")
 
     /** Remove: a lead that is not a job - status cancelled, with his reason kept verbatim; nothing is deleted from the record. */
-    fun remove(projectId: Int, reason: String) =
-        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/update", JsonObject().apply { addProperty("status", "cancelled"); addProperty("note", "Removed from the board: " + reason.ifBlank { "no reason given" }) }) }) { "Removed from the board (kept on file as cancelled)." }
+    fun remove(projectId: Int, reason: String, onGone: (() -> Unit)? = null) =
+        write(RoomCard.Vitals.key, { writers.post("projects/$projectId/update", JsonObject().apply { addProperty("status", "cancelled"); addProperty("note", "Removed from the board: " + reason.ifBlank { "no reason given" }) }) }, onGone) { "Removed from the board (kept on file as cancelled)." }
 
     /** The lead's life: its status word, through the update door (the record's own words: projects.STATUSES). */
     fun setStatus(projectId: Int, status: String) =

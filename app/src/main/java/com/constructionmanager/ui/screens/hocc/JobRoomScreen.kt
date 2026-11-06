@@ -107,6 +107,8 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     // a client opened from anywhere on the wheel (the job card, a lead, a new caller): the client wheel over this one; back comes here
     var clientOpen by rememberSaveable { mutableStateOf<String?>(null) }      // "+1614..." or "label:Spam Risk"
+    // a full page over the wheel: "follow" (the Follow-up page) or "sheet:<call id>" / "sheet:new" (a call sheet) (Nov 6 2026)
+    var overlay by rememberSaveable { mutableStateOf<String?>(null) }
     // THE WHEEL (Tyler, Nov 4 2026: "hub and spoke, left, center, right... each main page of any spoke off the main wheel has a left,
     // center and right: its own hub and spoke"). Home is the main wheel; a spoke opened is a wheel of its own; back goes up one wheel.
     var wheel by rememberSaveable { mutableStateOf(Wheel.HOME.name) }
@@ -117,8 +119,17 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
 
     LaunchedEffect(Unit) { room.remember(context); room.loadOrder(context) }
     LaunchedEffect(selectedId) { selectedId?.let { room.open(it) } }
-    BackHandler(enabled = clientOpen != null || expanded != null || wheel != Wheel.HOME.name) {
-        if (clientOpen != null) clientOpen = null else if (expanded != null) expanded = null else wheel = Wheel.HOME.name
+    BackHandler(enabled = overlay != null || clientOpen != null || expanded != null || wheel != Wheel.HOME.name) {
+        if (overlay != null) overlay = null else if (clientOpen != null) clientOpen = null else if (expanded != null) expanded = null else wheel = Wheel.HOME.name
+    }
+    val ov = overlay
+    if (ov != null) {
+        when {
+            ov == "follow" -> FollowUpPage(readJson, room, onClose = { overlay = null })
+            ov.startsWith("sheet:") -> CallSheetForm(ov.removePrefix("sheet:"), readJson, room, onClose = { overlay = null })
+            else -> overlay = null
+        }
+        return
     }
     val openClient: (String?, String?) -> Unit = { phone, label -> clientOpen = phone ?: ("label:" + (label ?: "")) }
     val co = clientOpen
@@ -163,8 +174,9 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                     ex != null && data != null && id != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
                         CardFor(ex, room, data, busy, full = true, onOpen = {})
                     }
-                    board -> BoardLayout(room, data, busy, projects, id, pick, readJson, onOpen = { expanded = it.key })
-                    else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) { androidx.compose.runtime.key(wheel) {
+                    board -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenOverlay provides { overlay = it }) {
+                        BoardLayout(room, data, busy, projects, id, pick, readJson, onOpen = { expanded = it.key }) }
+                    else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient, LocalOpenOverlay provides { overlay = it }) { androidx.compose.runtime.key(wheel) {
                         // the phone: a wheel is three pages - left spoke, hub, right spoke - opened on the hub. Swipe or tap a name.
                         val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 1) { 3 }
                         PageStrip(w, pager.currentPage, onGo = { scope.launch { pager.animateScrollToPage(it) } }, onUp = { wheel = Wheel.HOME.name })
@@ -175,7 +187,8 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                     // PARENT AND CHILD (Tyler, Nov 4 2026): a hub's left and right are its two closest children; the bottom wheel is
                                     // the rest; any child opened is a hub of its own. Everything within three taps of home.
                                     Wheel.HOME -> when (page) {
-                                        0 -> { OpenSpoke("Leads", "Open the leads wheel: new callers on its left, the clients on its right, site visits below.") { open(Wheel.LEADS) }
+                                        0 -> { FollowUpPeek(readJson, room) { overlay = "follow" }
+                                               OpenSpoke("Leads", "Open the leads wheel: calls on its left, the clients on its right, site visits below.") { open(Wheel.LEADS) }
                                                LeadsPage(readJson, pick, room, busy != null) }
                                         1 -> if (data != null) {
                                             CardFor(RoomCard.Vitals, room, data, busy, false) { expanded = RoomCard.Vitals.key }
@@ -194,7 +207,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                         }
                                     }
                                     Wheel.LEADS -> when (page) {
-                                        0 -> NewCallersPage(readJson)
+                                        0 -> { CallSheetsPage(readJson, room) { overlay = "sheet:$it" }; NewCallersPage(readJson) }
                                         1 -> { LeadsPage(readJson, pick, room, busy != null); Lbl("Site visits", modifier = Modifier.padding(top = 4.dp)); VisitsStrip(readJson, 14) }
                                         else -> ClientsPage(projects, id, pick)
                                     }
@@ -226,7 +239,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
  *  spoke opened is a wheel of its own (a child become a parent). The client wheel lives in ClientWheel.kt. */
 enum class Wheel(val left: String, val hub: String, val right: String) {
     HOME("Leads", "Project", "Estimate"),
-    LEADS("New callers", "Leads", "Clients"),
+    LEADS("Calls", "Leads", "Clients"),
     ESTIMATES("Scope & takeoff", "Estimate", "Money"),
     SCHEDULE("Daily logs", "Job schedule", "Punch list"),
 }
@@ -547,7 +560,11 @@ private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projec
                         readJson: (suspend (String) -> JsonObject?)?, onOpen: (RoomCard) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.weight(1f)) { LeadsPage(readJson, onPick, room, busy != null) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                val openOverlay = LocalOpenOverlay.current
+                FollowUpPeek(readJson, room) { openOverlay("follow") }
+                LeadsPage(readJson, onPick, room, busy != null)
+            }
             Column(Modifier.weight(2.1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (d != null) {
                     CardFor(RoomCard.Vitals, room, d, busy, false) { onOpen(RoomCard.Vitals) }
@@ -731,7 +748,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             val leave = LocalLeaveRoom.current
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (st == "complete") Tool("Reopen", !writing) { room.unarchiveJob(d.id) }
-                else Tool("Archive", !writing) { room.archiveJob(d.id) }
+                else Tool("Archive", !writing) { room.archiveJob(d.id) { leave() } }
                 Tool("Delete job", !writing) { confirmDelete = true }
             }
             if (confirmDelete) ConfirmDelete("this job", body = "It goes to the trash with its draft estimates and scope - restore it from Office › Trash. " +
@@ -741,7 +758,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                 var why by remember { mutableStateOf("") }
                 OutlinedTextField(why, { why = it }, label = { Text("Why it comes off the board (kept on file)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Solid("Remove it", Board.red, enabled = !writing) { room.remove(d.id, why); removing = false }
+                    Solid("Remove it", Board.red, enabled = !writing) { room.remove(d.id, why) { leave() }; removing = false }
                     Tool("Keep it") { removing = false }
                 }
             }
