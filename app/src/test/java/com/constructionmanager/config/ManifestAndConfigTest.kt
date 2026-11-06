@@ -16,7 +16,17 @@ class ManifestAndConfigTest {
     @Test
     fun `only the permissions the app uses are declared (B14)`() {
         val declared = Regex("""<uses-permission\s+android:name="android\.permission\.([A-Z_]+)"""").findAll(manifest).map { it.groupValues[1] }.toSet()
-        assertEquals(setOf("INTERNET", "CAMERA", "REQUEST_INSTALL_PACKAGES"), declared)
+        assertEquals(
+            setOf(
+                "INTERNET",
+                "CAMERA",                                         // job photos (PhotoDocumentationScreen, JobRoomScreen)
+                "REQUEST_INSTALL_PACKAGES",                       // OTA self-update (ApkInstaller)
+                "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", // Site fix (LocationReader, 0.5.0)
+                "READ_CALL_LOG",                                  // call log sync (CallLogSync, 0.7.1)
+                "READ_MEDIA_AUDIO", "READ_EXTERNAL_STORAGE",      // call recordings (RecordingsSync, 0.7.1; the latter to API 32)
+            ),
+            declared,
+        )
     }
 
     @Test

@@ -7,11 +7,14 @@
       photos) is added WITH the code and the runtime request that uses it, not before.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Site reads the phone's fix and posts it to the record (runtime request in HubSiteScreens / HomeScreen; LocationReader) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Photo Documentation takes pictures (runtime request in PhotoDocumentationScreen) -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Call recordings sync (runtime request in CarolineOfficeScreens; RecordingsSync). READ_EXTERNAL_STORAGE is its API <= 32 form -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Call log sync (runtime request in CarolineOfficeScreens; CallLogSync) -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- OTA self-update: install a downloaded update APK (sideload builds only; Play does not allow it - see B13) -->
