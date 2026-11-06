@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -504,7 +505,11 @@ private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projec
             RoomCard.SiteHours to Area(0, 3), RoomCard.Calls to Area(1, 3), RoomCard.Texts to Area(2, 3),
             RoomCard.Punch to Area(0, 4), RoomCard.Recordings to Area(1, 4),
         )
-        HubGrid(cards.map { it.second }, modifier = Modifier.fillMaxWidth()) {
+        // the design's 1 : 2.1 : 1 is drawn at 1480 px; on the Fold's ~750 dp the side cards would get ~165 dp, too narrow for their
+        // rows, so the side columns take a little more under 1100 dp (the centre card still the widest, as drawn)
+        val w = LocalConfiguration.current.screenWidthDp
+        HubGrid(cards.map { it.second }, gap = if (w < 1100) 10.dp else 14.dp,
+            weights = if (w < 1100) listOf(1.2f, 2f, 1.2f) else listOf(1f, 2.1f, 1f), modifier = Modifier.fillMaxWidth()) {
             cards.forEach { (c, _) -> Box { CardFor(c, room, d, busy, false) { onOpen(c) } } }
         }
         }
@@ -979,6 +984,11 @@ private fun LogsCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: B
         rows.take(if (full) 200 else 3).forEach { h ->
             var editing by remember(h) { mutableStateOf(false) }
             Divider(color = Board.borderSoft)
+            if (!full) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Num(d8(h.str("work_date")) ?: (h.str("work_date") ?: ""), 12)
+                Text(listOfNotNull(fmtH(h.num("hours") ?: 0.0), h.str("source_kind")?.let { "from $it" }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.ink)
+                h.str("note")?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Board.grey, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+            } else
             Row(Modifier.fillMaxWidth().clickable(enabled = full) { editing = !editing }.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                 Num(d8(h.str("work_date")) ?: (h.str("work_date") ?: ""), 12, modifier = Modifier.width(56.dp))
                 Column(Modifier.weight(1f)) {
@@ -1147,6 +1157,11 @@ private fun SelectionsCard(room: RoomViewModel, d: RoomData, writing: Boolean, f
         if (rows.isEmpty()) Dashed("No selections recorded yet.")
         rows.take(if (full) 200 else 6).forEach { m ->
             Divider(color = Board.borderSoft)
+            // folded into a narrow board column the label sits over the line, so the words keep the card's whole width
+            if (!full) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Lbl((m.str("supplier")?.takeIf { it.isNotBlank() } ?: humanStatus(m.str("status")) ?: "item"))
+                Text(m.str("line") ?: m.str("item") ?: "", style = MaterialTheme.typography.bodySmall, color = Board.ink)
+            } else
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                 Lbl((m.str("supplier")?.takeIf { it.isNotBlank() } ?: humanStatus(m.str("status")) ?: "item"), modifier = Modifier.width(78.dp).padding(top = 2.dp))
                 Column(Modifier.weight(1f)) {
