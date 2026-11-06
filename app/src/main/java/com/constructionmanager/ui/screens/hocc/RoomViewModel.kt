@@ -83,7 +83,7 @@ data class RoomData(
     val tasks: JsonElement?,          // GET projects/{id}/tasks
     val thread: JsonElement?,         // GET assist/thread
     val comms: JsonObject? = null,    // GET log/people/{phone} - the client's texts and calls, one list (kind text|call)
-    val siteHours: JsonElement? = null // GET projects/{id}/site-hours - days on site from the location history, when the office has it
+    val siteHours: JsonElement? = null // GET site-hours?project_id= - the job's timesheet from the location history (clients -> projects -> days)
 )
 
 /** A short line the room shows after a write: what the door said, in its words. */
@@ -202,7 +202,7 @@ class RoomViewModel @Inject constructor(
         val tasks = connector.getJson("projects/$id/tasks").valueOrNull()
         val thread = connector.getJson("assist/thread?limit=40").valueOrNull()
         val comms = if (phone != null) connector.getJson("log/people/" + Uri.encode(phone) + "?limit=800").valueOrNull()?.asObjOrNull() else null
-        val siteHours = connector.getJson("projects/$id/site-hours").valueOrNull()
+        val siteHours = connector.getJson("site-hours?project_id=$id").valueOrNull()
         _room.value = SectionState(
             loading = false,
             error = (card as? ConnectorResult.Failed)?.error?.message,

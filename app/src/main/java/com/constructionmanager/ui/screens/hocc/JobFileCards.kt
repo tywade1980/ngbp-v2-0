@@ -38,35 +38,42 @@ import java.util.Locale
 private val DAY = DateTimeFormatter.ofPattern("EEE MMM d, yyyy", Locale.US)
 private val CLOCK = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
-/** One day on site: the stretches between arriving and leaving, the day's total, and how the day was matched to this job. */
-data class SiteDay(val date: LocalDate, val stretches: List<String>, val hours: Double, val conf: String?, val address: String?,
-                   val calls: Int?, val texts: Int?)
+/** One day on site: the stretches between arriving and leaving (each "7:58 AM–9:44 AM · 1:46"), the day's total, its trips. */
+data class SiteDay(val date: LocalDate, val stretches: List<String>, val hours: Double, val time: String?, val trips: Int, val note: String?)
 
-/** Days on site for this job: from the location history when the office serves it (projects/{id}/site-hours), else the hours clocked
- *  and logged on the job, grouped by day. Second value: true when the days came from the location history. */
-fun siteDaysOf(d: RoomData): Pair<List<SiteDay>, Boolean> {
-    val sh = d.siteHours
-    val fromHistory = mutableListOf<SiteDay>()
-    if (sh != null) {
-        val obj = sh.asObjOrNull()
-        val files = obj?.arrOf("files")?.objects()
-        val groups: List<Pair<String?, List<JsonObject>>> = when {
-            files != null -> files.map { f -> f.str("label", "address") to (f.arrOf("days")?.objects().orEmpty()) }
-            else -> listOf(null to sh.rowsOf("days", "rows", "items").objects())
+/** A job's sheet: its days, where they came from, the hours on file from other sources (never added in), and the page's stats. */
+data class SiteSheet(val days: List<SiteDay>, val fromHistory: Boolean, val otherHours: Double, val stats: JsonObject?, val address: String?)
+
+private val STRETCH = Regex("""(\d{1,2}:\d{2} [AP]M)-(\d{1,2}:\d{2} [AP]M)""")
+
+/** The job's sheet: the office's site-hours answer for this job (clients -> projects -> days) when it serves one; else the location rows in
+ *  the job's hours (source location, the trips read from each row's note), with every other source counted beside them, never added in;
+ *  else the hours clocked and logged on the job, one row per day. */
+fun siteSheetOf(d: RoomData): SiteSheet {
+    val proj = d.siteHours.asObjOrNull()?.arrOf("clients")?.objects().orEmpty()
+        .flatMap { it.arrOf("projects")?.objects().orEmpty() }
+        .firstOrNull { it.num("project_id")?.toInt() == d.id }
+    if (proj != null) {
+        val days = proj.arrOf("days")?.objects().orEmpty().mapNotNull { x ->
+            val date = x.str("date")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
+            val st = x.arrOf("stretches")?.objects().orEmpty().map { s ->
+                listOfNotNull(s.str("clock_in"), s.str("clock_out")).joinToString("–") + (s.str("time")?.let { " · $it" } ?: "")
+            }.ifEmpty { listOfNotNull(listOfNotNull(x.str("clock_in"), x.str("clock_out")).takeIf { it.size == 2 }?.joinToString("–")) }
+            SiteDay(date, st, x.num("hours") ?: 0.0, x.str("time"), x.num("trips")?.toInt() ?: st.size, x.str("note"))
         }
-        groups.forEach { (label, days) ->
-            days.forEach { x ->
-                val date = x.str("date", "work_date")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@forEach
-                val trips = x.str("trip_list", "stretches")?.split(';')?.map { it.trim().replace("-", "–") }?.filter { it.isNotBlank() }
-                    ?: listOfNotNull(listOfNotNull(x.str("in", "arrived"), x.str("out", "left")).takeIf { it.size == 2 }?.joinToString("–"))
-                fromHistory += SiteDay(date, trips, x.num("hours") ?: 0.0, x.str("conf", "confidence"), x.str("address", "label") ?: label,
-                    x.num("calls")?.toInt(), x.num("texts")?.toInt())
-            }
-        }
+        return SiteSheet(days.sortedByDescending { it.date }, true, proj.num("other_hours") ?: 0.0, proj.objOf("stats"), proj.str("address"))
     }
-    if (fromHistory.isNotEmpty()) return fromHistory.sortedByDescending { it.date } to true
-    // the hours on the record (clocked in and out, or logged), one row per day
     val rows = d.hours?.rowsOf("entries")?.objects().orEmpty()
+    val loc = rows.filter { it.str("source_kind") == "location" }
+    if (loc.isNotEmpty()) {
+        val days = loc.mapNotNull { e ->
+            val date = e.str("work_date")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
+            val st = STRETCH.findAll(e.str("note") ?: "").map { "${it.groupValues[1]}–${it.groupValues[2]}" }.toList()
+            SiteDay(date, st, e.num("hours") ?: 0.0, null, st.size.coerceAtLeast(1), e.str("note"))
+        }
+        return SiteSheet(days.sortedByDescending { it.date }, true, rows.filter { it.str("source_kind") != "location" }.sumOf { it.num("hours") ?: 0.0 }, null, null)
+    }
+    // the hours on the record (clocked in and out, or logged), one row per day
     val byDay = rows.groupBy { it.str("work_date")?.take(10) }.filterKeys { it != null }
     val days = byDay.mapNotNull { (day, es) ->
         val date = runCatching { LocalDate.parse(day) }.getOrNull() ?: return@mapNotNull null
@@ -74,9 +81,9 @@ fun siteDaysOf(d: RoomData): Pair<List<SiteDay>, Boolean> {
             val a = localClock(e.str("started_at")); val b = localClock(e.str("ended_at"))
             if (a != null && b != null) "$a–$b" else null
         }
-        SiteDay(date, stretches, es.sumOf { it.num("hours") ?: 0.0 }, "clocked", null, null, null)
+        SiteDay(date, stretches, es.sumOf { it.num("hours") ?: 0.0 }, null, stretches.size.coerceAtLeast(1), null)
     }
-    return days.sortedByDescending { it.date } to false
+    return SiteSheet(days.sortedByDescending { it.date }, false, 0.0, null, null)
 }
 
 private fun localClock(raw: String?): String? = try {
@@ -84,23 +91,6 @@ private fun localClock(raw: String?): String? = try {
 } catch (e: Exception) { null }
 
 private fun hrs(h: Double): String = String.format(Locale.US, "%.2f", h).trimEnd('0').trimEnd('.') + " h"
-
-/** The match's sureness, coloured as the Job Site Hours page colours it: high green, medium amber, low red; his own map blue. */
-@Composable
-private fun ConfPill(conf: String?) {
-    val c = (conf ?: "").lowercase()
-    val (label, color) = when (c) {
-        "high" -> "high" to Board.green
-        "medium" -> "medium" to Board.barProjected
-        "low" -> "low" to Board.red
-        "your map" -> "your map" to Board.blue
-        "clocked" -> "clocked" to Board.grey
-        "" -> return
-        else -> c to Board.grey
-    }
-    Text(label, style = MaterialTheme.typography.labelSmall, color = color,
-        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, color, RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 1.dp))
-}
 
 @Composable
 private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
@@ -110,37 +100,46 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Job site hours: the timesheet for this job - each day, each stretch on site, the day's total, the match. */
+/** Job site hours: the timesheet for this job, read left to right like the Job Site Hours page - the day, every stretch on site with its
+ *  clock in, clock out and time, the day's total. Hours from other sources sit beside it, never added in. */
 @Composable
 fun SiteHoursCard(d: RoomData, full: Boolean, onOpen: () -> Unit) {
-    val (days, fromHistory) = siteDaysOf(d)
+    val sheet = siteSheetOf(d)
+    val days = sheet.days
     BoardCard {
         CardHead("Job site hours") { if (!full && days.isNotEmpty()) Tool("Open sheet") { onOpen() } }
         if (days.isEmpty()) {
-            Dashed("No days on site for this job yet. Days from your location history land here as soon as the office has them matched to this address; hours you clock or log here land here too.")
+            Dashed("No days on site for this job yet. Days from your location history land here as soon as they are matched to this job's address; hours you clock or log here land here too.")
             return@BoardCard
         }
+        val st = sheet.stats
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Stat("Hours", hrs(days.sumOf { it.hours }), Modifier.weight(1f))
-            Stat("Days on site", days.size.toString(), Modifier.weight(1f))
+            Stat("On site", st?.str("time") ?: hrs(days.sumOf { it.hours }), Modifier.weight(1f))
+            Stat("Days", (st?.num("days_on_site")?.toInt() ?: days.size).toString(), Modifier.weight(1f))
         }
-        Text(if (fromHistory) "From your location history, matched to this job by address. " + days.first().date.format(DAY) + " back to " + days.last().date.format(DAY) + "."
-             else "From the hours clocked and logged on this job. Days from your location history join these once the office has them matched.",
-            style = MaterialTheme.typography.bodySmall, color = Board.grey)
-        days.mapNotNull { it.address }.distinct().takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" · "), style = MaterialTheme.typography.titleSmall) }
+        if (sheet.otherHours > 0.0) Text("Other hours on file (Houzz, calls, the clock): " + hrs(sheet.otherHours) + ", counted beside these, never added in.",
+            style = MaterialTheme.typography.bodySmall, color = Board.body)
+        Text((if (sheet.fromHistory) "From your location history, matched to this job by address. " else "From the hours clocked and logged on this job. ") +
+            days.last().date.format(DAY) + " to " + days.first().date.format(DAY) + ".", style = MaterialTheme.typography.bodySmall, color = Board.grey)
+        sheet.address?.let { Text(it, style = MaterialTheme.typography.titleSmall) }
+        if (full && st != null) {
+            listOfNotNull(
+                st.str("avg_in")?.let { "Average arrival $it" }, st.str("avg_out")?.let { "average departure $it" },
+                st.num("longest_streak")?.let { "longest run ${it.toInt()} days in a row" + (st.str("streak_dates")?.let { d -> " ($d)" } ?: "") },
+                st.num("early_starts")?.takeIf { it > 0 }?.let { "${it.toInt()} early starts" }, st.num("late_nights")?.takeIf { it > 0 }?.let { "${it.toInt()} late nights" },
+                st.num("weekend_days")?.takeIf { it > 0 }?.let { "${it.toInt()} weekend days" }
+            ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(", ") + ".", style = MaterialTheme.typography.bodySmall, color = Board.body) }
+        }
         days.take(if (full) days.size else 6).forEach { day ->
             Divider(color = Board.borderSoft)
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(day.date.format(DAY), style = MaterialTheme.typography.bodySmall, color = Board.ink)
                     day.stretches.forEach { Num(it, 12, Board.body, androidx.compose.ui.text.font.FontWeight.Normal) }
-                    if (full && ((day.calls ?: 0) > 0 || (day.texts ?: 0) > 0))
-                        Text(listOfNotNull(day.calls?.takeIf { it > 0 }?.let { countLabel(it, "call") }, day.texts?.takeIf { it > 0 }?.let { countLabel(it, "text") }).joinToString(" · ") + " with the client that day",
-                            style = MaterialTheme.typography.labelSmall, color = Board.grey)
                 }
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Num(hrs(day.hours), 13)
-                    ConfPill(day.conf)
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Num(day.time ?: hrs(day.hours), 13)
+                    if (day.trips > 1) Text("${day.trips} trips", style = MaterialTheme.typography.labelSmall, color = Board.grey)
                 }
             }
         }

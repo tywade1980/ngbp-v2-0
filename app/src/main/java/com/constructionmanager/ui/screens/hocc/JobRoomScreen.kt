@@ -546,6 +546,15 @@ private fun apptWhen(a: JsonObject): String? {
     } catch (e: Exception) { d8(raw) }
 }
 
+@Composable
+private fun CalRow(whenText: String, what: String, color: Color, dot: Color) {
+    Row(Modifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(dot))
+        Num(whenText, 13, color = color, modifier = Modifier.width(112.dp))
+        if (what.isNotBlank()) Text(what, style = MaterialTheme.typography.bodyMedium, color = if (color == Board.grey) Board.grey else Board.body)
+    }
+}
+
 private fun apptWhat(a: JsonObject): String? = a.str("name", "title", "what", "summary")
 
 private fun d8(iso: String?): String? = iso?.take(10)?.let { runCatching { LocalDate.parse(it).format(MDAY) }.getOrNull() }
@@ -657,15 +666,13 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             // the company calendar
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Lbl("On the company calendar")
-                if (appts.isEmpty()) Text("Nothing on the calendar for this job.", style = MaterialTheme.typography.bodySmall, color = Board.grey)
-                Column(Modifier.border(0.dp, Color.Transparent)) {
-                    appts.take(if (full) 20 else 4).forEach { a ->
-                        Row(Modifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(Board.blue))
-                            Num(apptWhen(a) ?: "", 13, color = if (localDayOf(a.str("start_at", "start", "at", "when")) < todayIso) Board.grey else Board.ink, modifier = Modifier.width(84.dp))
-                            Text(apptWhat(a) ?: "Appointment", style = MaterialTheme.typography.bodyMedium, color = Board.body)
-                        }
-                    }
+                // past (greyed, the last two), then TODAY, then what is ahead - so the list always opens on today's date
+                val past = appts.filter { localDayOf(it.str("start_at", "start", "at", "when")) < todayIso }
+                val ahead = appts.filter { localDayOf(it.str("start_at", "start", "at", "when")) >= todayIso }
+                Column {
+                    past.forEach { a -> CalRow(apptWhen(a) ?: "", apptWhat(a) ?: "Appointment", Board.grey, Board.border) }
+                    CalRow("Today " + LocalDate.now().format(MDAY), if (ahead.isEmpty()) "Nothing booked ahead for this job." else "", Board.red, Board.red)
+                    ahead.take(if (full) 20 else 4).forEach { a -> CalRow(apptWhen(a) ?: "", apptWhat(a) ?: "Appointment", Board.ink, Board.blue) }
                 }
             }
             // the tools: real actions, one tap each
