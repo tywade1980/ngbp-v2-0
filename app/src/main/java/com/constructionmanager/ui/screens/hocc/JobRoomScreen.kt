@@ -134,7 +134,9 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
 
     Column(Modifier.fillMaxSize().background(Board.ground).imePadding()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val board = maxWidth >= 700.dp && maxHeight >= 600.dp
+            // the Fold's open screen (Tyler, Nov 6 2026: "this is what i wanna see in hocc when i open the fold to is its whole screen"). The
+            // Fold7's inner screen reads ~650-750 dp wide depending on its screen zoom, so 700 dp missed it; the cover screen is ~410 dp.
+            val board = maxWidth >= 600.dp && maxHeight >= 480.dp
             Column(Modifier.fillMaxSize()) {
                 val w = runCatching { Wheel.valueOf(wheel) }.getOrDefault(Wheel.HOME)
                 HeaderBar(projects.count { it.boolOf("open") == true }, board,
@@ -163,7 +165,23 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                     ex != null && data != null && id != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
                         CardFor(ex, room, data, busy, full = true, onOpen = {})
                     }
-                    board -> BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
+                    board -> Box(Modifier.fillMaxSize()) {
+                        androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) {
+                            BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
+                        }
+                        // the Clients drawer of his design file: the leads and clients by where each stands, over the board's left edge
+                        if (w != Wheel.HOME) {
+                            Box(Modifier.fillMaxSize().background(Color(0x731B2229)).clickable { wheel = Wheel.HOME.name })
+                            Column(Modifier.fillMaxHeight().width(360.dp).background(Color.White).verticalScroll(rememberScrollState()).padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Disp("Clients", 26, modifier = Modifier.weight(1f))
+                                    Tool("Close") { wheel = Wheel.HOME.name }
+                                }
+                                LeadsPage(projects, id, pick, room, busy != null)
+                            }
+                        }
+                    }
                     else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) { androidx.compose.runtime.key(wheel) {
                         // the phone: a wheel is three pages - left spoke, hub, right spoke - opened on the hub. Swipe or tap a name.
                         val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 1) { 3 }
@@ -184,6 +202,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                             CardFor(RoomCard.Schedule, room, data, busy, false) { expanded = RoomCard.Schedule.key }
                                             CardFor(RoomCard.Logs, room, data, busy, false) { expanded = RoomCard.Logs.key }
                                             CardFor(RoomCard.Punch, room, data, busy, false) { expanded = RoomCard.Punch.key }
+                                            CardFor(RoomCard.SiteHours, room, data, busy, false) { expanded = RoomCard.SiteHours.key }
                                         }
                                         else -> if (data != null) {
                                             OpenSpoke("Estimate", "Open the estimate wheel: scope and takeoff on its left, the money on its right, selections and photos below.") { open(Wheel.ESTIMATES) }
@@ -191,6 +210,9 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                             CardFor(RoomCard.Scope, room, data, busy, false) { expanded = RoomCard.Scope.key }
                                             CardFor(RoomCard.Selections, room, data, busy, false) { expanded = RoomCard.Selections.key }
                                             CardFor(RoomCard.Photos, room, data, busy, false) { expanded = RoomCard.Photos.key }
+                                            CardFor(RoomCard.Texts, room, data, busy, false) { expanded = RoomCard.Texts.key }
+                                            CardFor(RoomCard.Calls, room, data, busy, false) { expanded = RoomCard.Calls.key }
+                                            CardFor(RoomCard.Recordings, room, data, busy, false) { expanded = RoomCard.Recordings.key }
                                         }
                                     }
                                     Wheel.LEADS -> when (page) {
@@ -376,7 +398,7 @@ private fun HeaderBar(openCount: Int, board: Boolean, onBack: (() -> Unit)?, onL
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (onBack != null) IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Board.ink) }
-        Solid(if (board) "☰  Leads  $openCount" else "☰ Leads $openCount", Board.ink, onClick = onLeads)
+        Solid(if (board) "☰  Clients  $openCount" else "☰ Leads $openCount", Board.ink, onClick = onLeads)
         Column(Modifier.weight(1f)) {
             if (board) Lbl("Today is")
             Disp(dayLine, if (board) 24 else 17, maxLines = 1)
@@ -468,31 +490,21 @@ private fun LeadRow(p: JsonObject, cur: Boolean, onPick: (RoomKey) -> Unit) {
 
 @Composable
 private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit, onOpen: (RoomCard) -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.weight(1f)) { LeadsPage(projects, currentId, onPick, room, busy != null) }
-            Column(Modifier.weight(2.1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (d != null) {
-                    CardFor(RoomCard.Vitals, room, d, busy, false) { onOpen(RoomCard.Vitals) }
-                    CardFor(RoomCard.Caroline, room, d, busy, false) { onOpen(RoomCard.Caroline) }
-                }
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (d != null) {
-                    CardFor(RoomCard.Estimate, room, d, busy, false) { onOpen(RoomCard.Estimate) }
-                    CardFor(RoomCard.Scope, room, d, busy, false) { onOpen(RoomCard.Scope) }
-                    CardFor(RoomCard.Selections, room, d, busy, false) { onOpen(RoomCard.Selections) }
-                    CardFor(RoomCard.Photos, room, d, busy, false) { onOpen(RoomCard.Photos) }
-                }
-            }
-        }
-        if (d != null) {
-            Lbl("Scheduling")
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1.3f)) { CardFor(RoomCard.Schedule, room, d, busy, false) { onOpen(RoomCard.Schedule) } }
-                Column(Modifier.weight(1f)) { CardFor(RoomCard.Logs, room, d, busy, false) { onOpen(RoomCard.Logs) } }
-                Column(Modifier.weight(1f)) { CardFor(RoomCard.Punch, room, d, busy, false) { onOpen(RoomCard.Punch) } }
-            }
+    // HIS DESIGN FILE'S GRID (Oct 9 2026, "Wade OS Job Board"; Nov 6: "this is what i wanna see in hocc when i open the fold"): estimates,
+    // job schedule and daily logs down the left; the job card spanning two rows in the centre with Caroline under it; scope, selections and
+    // photos down the right. Under them, the job's file around the same centre (Nov 6: "each will be a peripheral card around that center
+    // card"): job site hours | call log | texts, then the punch list | recordings.
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp)) {
+        if (d == null) { Spacer(Modifier.height(24.dp)); return@Column }
+        val cards = listOf(
+            RoomCard.Estimate to Area(0, 0), RoomCard.Vitals to Area(1, 0, 2), RoomCard.Scope to Area(2, 0),
+            RoomCard.Schedule to Area(0, 1), RoomCard.Selections to Area(2, 1),
+            RoomCard.Logs to Area(0, 2), RoomCard.Caroline to Area(1, 2), RoomCard.Photos to Area(2, 2),
+            RoomCard.SiteHours to Area(0, 3), RoomCard.Calls to Area(1, 3), RoomCard.Texts to Area(2, 3),
+            RoomCard.Punch to Area(0, 4), RoomCard.Recordings to Area(1, 4),
+        )
+        HubGrid(cards.map { it.second }, modifier = Modifier.fillMaxWidth()) {
+            cards.forEach { (c, _) -> Box { CardFor(c, room, d, busy, false) { onOpen(c) } } }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -511,10 +523,30 @@ private fun CardFor(c: RoomCard, room: RoomViewModel, d: RoomData, busy: String?
         RoomCard.Photos -> PhotosCard(room, d, writing, full, onOpen)
         RoomCard.Logs -> LogsCard(room, d, writing, full, onOpen)
         RoomCard.Punch -> PunchCard(room, d, writing, full, onOpen)
+        RoomCard.SiteHours -> SiteHoursCard(d, full, onOpen)
+        RoomCard.Texts -> TextsCard(d, full, onOpen)
+        RoomCard.Calls -> CallsCard(d, full, onOpen)
+        RoomCard.Recordings -> RecordingsCard(d, full, onOpen)
     }
 }
 
 private fun firstName(c: JsonObject?): String = (c?.str("client_name", "client") ?: "").trim().substringBefore(' ').ifBlank { "the client" }
+
+/** The local day (yyyy-mm-dd) of a stored time, in this phone's zone; "" when it can't be read. */
+private fun localDayOf(raw: String?): String = try {
+    raw?.let { java.time.OffsetDateTime.parse(it.replace(' ', 'T')).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate().toString() } ?: ""
+} catch (e: Exception) { raw?.take(10) ?: "" }
+
+/** An appointment's day and time as he reads them ("Nov 9 10:00 AM"). */
+private fun apptWhen(a: JsonObject): String? {
+    val raw = a.str("start_at", "start", "at", "when") ?: return null
+    return try {
+        val t = java.time.OffsetDateTime.parse(raw.replace(' ', 'T')).atZoneSameInstant(java.time.ZoneId.systemDefault())
+        t.format(MDAY) + " " + t.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+    } catch (e: Exception) { d8(raw) }
+}
+
+private fun apptWhat(a: JsonObject): String? = a.str("name", "title", "what", "summary")
 
 private fun d8(iso: String?): String? = iso?.take(10)?.let { runCatching { LocalDate.parse(it).format(MDAY) }.getOrNull() }
 
@@ -557,9 +589,17 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             Num(listOfNotNull(phone, c?.str("client_email", "email") ?: "no email on file").joinToString(" · "), 13, Color.White.copy(alpha = 0.95f), FontWeight.Normal)
         }
         // NEXT
-        val appts = c?.arrOf("appointments")?.objects().orEmpty()
+        // the company calendar opens on today (Tyler, Nov 6 2026: "why the company calendar sits in sept 14th is wild"): the record
+        // gives start_at and name, newest first; read those, put them in time order, and start two before today
+        val apptsAll = c?.arrOf("appointments")?.objects().orEmpty()
+            .filter { (it.str("status") ?: "") != "cancelled" }
+            .sortedBy { it.str("start_at", "start", "at", "when") ?: "" }
+        val todayIso = LocalDate.now().toString()
+        val firstUpcoming = apptsAll.indexOfFirst { (it.str("start_at", "start", "at", "when") ?: "").let { s -> localDayOf(s) >= todayIso } }
+        val appts = if (firstUpcoming < 0) apptsAll.takeLast(2) else apptsAll.drop(maxOf(0, firstUpcoming - 2))
+        val upcoming = if (firstUpcoming < 0) emptyList() else apptsAll.drop(firstUpcoming)
         val tasks = d.tasks?.rowsOf("tasks")?.objects().orEmpty().filter { it.str("status") != "Completed" }
-        val next = appts.firstOrNull()?.let { a -> listOfNotNull(d8(a.str("start", "at", "when")), a.str("title", "what", "summary")).joinToString(" ") }
+        val next = upcoming.firstOrNull()?.let { a -> listOfNotNull(apptWhen(a), apptWhat(a)).joinToString(" ") }
             ?: tasks.firstOrNull()?.str("title")
         Row(Modifier.fillMaxWidth().background(Board.ink).padding(horizontal = 20.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Lbl("Next", Color(0xFFAEB8C2))
@@ -622,8 +662,8 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     appts.take(if (full) 20 else 4).forEach { a ->
                         Row(Modifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(Board.blue))
-                            Num(d8(a.str("start", "at", "when")) ?: (a.str("start", "at", "when") ?: ""), 13, modifier = Modifier.width(84.dp))
-                            Text(a.str("title", "what", "summary") ?: "", style = MaterialTheme.typography.bodyMedium, color = Board.body)
+                            Num(apptWhen(a) ?: "", 13, color = if (localDayOf(a.str("start_at", "start", "at", "when")) < todayIso) Board.grey else Board.ink, modifier = Modifier.width(84.dp))
+                            Text(apptWhat(a) ?: "Appointment", style = MaterialTheme.typography.bodyMedium, color = Board.body)
                         }
                     }
                 }
