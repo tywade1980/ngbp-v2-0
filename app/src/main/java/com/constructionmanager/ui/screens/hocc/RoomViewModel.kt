@@ -290,6 +290,10 @@ class RoomViewModel @Inject constructor(
     fun deleteMaterial(materialId: Long) =
         write(RoomCard.Selections.key, { writers.delete("materials/$materialId") }) { trashSay(it, "Selection deleted - restore it from Office > Trash.") }
 
+    /** A photo or file off this job: the file stays in the library, its place on the job goes to the trash. */
+    fun removePhoto(projectId: Int, itemId: String) =
+        write(RoomCard.Photos.key, { writers.delete("attachments/" + Uri.encode(itemId) + "?kind=project&ref=$projectId") }) { trashSay(it, "Taken off the job - restore it from Office > Trash.") }
+
     /** A draft estimate -> the trash (the office refuses a sent or approved one, in its words). */
     fun deleteEstimate(estimateId: Long) =
         write(RoomCard.Estimate.key, { writers.delete("hub/estimates/$estimateId") }) { trashSay(it, "Estimate deleted - restore it from Office > Trash.") }

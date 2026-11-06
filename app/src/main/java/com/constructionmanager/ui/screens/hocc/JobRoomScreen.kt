@@ -1175,6 +1175,12 @@ private fun PhotosCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     Text(a.str("title") ?: a.str("first_filename") ?: a.str("media_type") ?: "file", style = MaterialTheme.typography.bodySmall, color = Board.ink, maxLines = 2)
                     Text(listOfNotNull(a.str("last_at")?.let { serverTimeToLocal(it) ?: it }, a.str("last_source"), a.str("role")).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.grey)
                 }
+                // off this job (0.7.4): the file stays in the library; the trash puts it back on
+                var confirm by remember(a) { mutableStateOf(false) }
+                if (itemId.isNotBlank()) Tool("Remove", !writing) { confirm = true }
+                if (confirm) ConfirmDelete("this photo from the job", verb = "Remove",
+                    body = "It comes off this job; the file itself is kept. Restore it from Office › Trash.",
+                    onYes = { room.removePhoto(d.id, itemId); confirm = false }, onNo = { confirm = false })
             }
         }
     }
