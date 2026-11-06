@@ -686,7 +686,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             val open = d.clock?.arrOf("open")?.objects()?.firstOrNull { it.num("project_id")?.toInt() == d.id }
             val anyOpen = d.clock?.arrOf("open")?.size() ?: 0
             Divider(color = Board.borderSoft)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (open != null) Tool("Clock out", !writing) { room.clockOut(d.id) }
                 else Tool("Clock in", !writing && anyOpen == 0) { room.clockIn(d.id) }
                 if (phone != null) Tool("Call") { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
@@ -696,7 +696,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             }
             var removing by remember { mutableStateOf(false) }
             val st = (c?.str("status") ?: "").lowercase()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (st in setOf("lead", "estimating", "quoted")) Solid("Award - they signed", Board.green, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.award(d.id) }
                 if (st == "approved") Solid("Start on site", Board.rust, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.setStatus(d.id, "active") }
                 if (st == "active") Solid("To punch list", Board.rust, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.setStatus(d.id, "punch") }
@@ -762,6 +762,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
 
 // ------------------------------------------------------------------ Caroline: all communications with the client; Enter is a new line
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CarolineCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: Boolean, onOpen: () -> Unit) {
     val first = firstName(d.card)
@@ -778,7 +779,7 @@ private fun CarolineCard(room: RoomViewModel, d: RoomData, writing: Boolean, ful
                 Text("All communications with $first", style = MaterialTheme.typography.bodySmall, color = Board.grey)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("all" to "All", "calls" to "Calls", "texts" to "Texts", "emails" to "Emails", "orders" to "Your orders").forEach { (k, l) ->
                 if (filter == k) Solid(l, Board.blue, modifier = Modifier.heightIn(min = 34.dp)) { } else Tool(l) { filter = k }
             }
