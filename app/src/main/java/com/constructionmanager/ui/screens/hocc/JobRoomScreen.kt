@@ -638,7 +638,12 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             val paid = bill?.str("paid")?.toDoubleOrNull()
             val balance = bill?.str("balance")?.toDoubleOrNull() ?: (if (contract != null && paid != null) contract - paid else null)
             val hourRows = d.hours?.rowsOf("entries")?.objects().orEmpty()
-            val hours = hourRows.sumOf { it.num("hours") ?: 0.0 }
+            // hours from his location history and hours from anywhere else (Houzz, calls, the clock) are never added together: the
+            // tile shows the job site hours when there are any, and the line under it names the rest (Nov 6 2026, the hours thread)
+            val locHours = hourRows.filter { it.str("source_kind") == "location" }.sumOf { it.num("hours") ?: 0.0 }
+            val otherHours = hourRows.filter { it.str("source_kind") != "location" }.sumOf { it.num("hours") ?: 0.0 }
+            val hours = if (locHours > 0.0) locHours else otherHours
+            val hoursLabel = if (locHours > 0.0) "Hours on site" else "Hours worked"
             val approx = bill == null
             // four tiles: one row when the card is wide, two by two on the phone (a four-across row wraps the dollars letter by letter)
             BoxWithConstraints { if (maxWidth >= 520.dp) {
@@ -646,7 +651,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     Tile("Contract", money(contract), modifier = Modifier.weight(1f), approx = approx && contract != null)
                     Tile("Paid", money(paid ?: 0.0), Board.green, Modifier.weight(1f), approx = approx)
                     Tile("Balance", money(balance), Board.rust, Modifier.weight(1f), approx = approx && balance != null)
-                    Tile("Hours worked", fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
+                    Tile(hoursLabel, fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -656,7 +661,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Tile("Balance", money(balance), Board.rust, Modifier.weight(1f), approx = approx && balance != null)
-                        Tile("Hours worked", fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
+                        Tile(hoursLabel, fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
                     }
                 }
             } }
@@ -667,7 +672,8 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     contract != null -> "Money is the job's budget; no estimate on file."
                     else -> "No money on file for this job yet."
                 }, style = MaterialTheme.typography.bodySmall, color = Board.grey)
-                Text("Hours: " + (hourRows.firstOrNull()?.str("work_date")?.let { "logged through " + (d8(it) ?: it) } ?: "none logged yet") + " · ${hourRows.size} entries",
+                Text("Hours: " + (hourRows.firstOrNull()?.str("work_date")?.let { "logged through " + (d8(it) ?: it) } ?: "none logged yet") + " · ${hourRows.size} entries" +
+                    (if (locHours > 0.0 && otherHours > 0.0) " · ${fmtH(otherHours)} more from Houzz, calls and the clock, not added in" else ""),
                     style = MaterialTheme.typography.bodySmall, color = Board.grey)
             }
             // the company calendar
@@ -769,7 +775,13 @@ private fun CarolineCard(room: RoomViewModel, d: RoomData, writing: Boolean, ful
     var filter by rememberSaveable { mutableStateOf("all") }
     val calls = d.client?.arrOf("calls")?.objects().orEmpty().map { Triple(it.str("started_at", "at", "created_at") ?: "", "Call", it.str("summary", "outcome", "transcript_summary") ?: "(call on file)") }
     val texts = d.client?.arrOf("messages", "texts")?.objects().orEmpty().map { Triple(it.str("created_at", "at") ?: "", if (it.str("direction") == "inbound") "Text from $first" else "Text to $first", it.str("body", "text") ?: "") }
-    val orders = d.thread?.rowsOf("messages")?.objects().orEmpty().map { Triple(it.str("at") ?: "", if (it.str("from") == "tyler") "You" else "Caroline", it.str("text") ?: "") }
+    // her thread is the whole office's; on a client's board only the messages that name this client belong (it showed the morning
+    // rundown under "All communications with Barbara")
+    val who = listOfNotNull(d.card?.str("client_name", "client")?.trim()?.takeIf { it.length > 2 }, first.takeIf { it.length > 2 && it != "the client" },
+        d.card?.str("client_phone", "phone")?.filter { it.isDigit() }?.takeLast(10)?.takeIf { it.length == 10 })
+    val orders = d.thread?.rowsOf("messages")?.objects().orEmpty()
+        .filter { m -> val t = m.str("text") ?: ""; who.any { w -> t.contains(w, ignoreCase = true) || (w.all { ch -> ch.isDigit() } && t.filter { ch -> ch.isDigit() }.contains(w)) } }
+        .map { Triple(it.str("at") ?: "", if (it.str("from") == "tyler") "You" else "Caroline", it.str("text") ?: "") }
     val rows = when (filter) { "calls" -> calls; "texts" -> texts; "emails" -> emptyList(); "orders" -> orders; else -> calls + texts + orders }
         .sortedByDescending { it.first }
     BoardCard(strong = Board.blue, padding = 18) {
