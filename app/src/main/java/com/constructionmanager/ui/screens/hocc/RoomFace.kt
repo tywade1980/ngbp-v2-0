@@ -159,14 +159,15 @@ object RoomFaces {
         // money: the books first, then the estimate's total, then the job's budget - said which
         val bill = d.billing?.objOf("bill")
         val est = d.estimate?.asObjOrNull()
-        val estTotal = est?.objOf("totals")?.num("total", "grand_total") ?: est?.num("total")
-        val contract = bill?.str("total")?.toDoubleOrNull() ?: estTotal ?: c?.num("budget")
+        val estTotal = (est?.objOf("totals")?.num("total", "grand_total") ?: est?.num("total"))?.takeIf { it > 0 }
+        val budget = c?.num("budget")?.takeIf { it > 0 }
+        val contract = bill?.str("total")?.toDoubleOrNull()?.takeIf { it > 0 } ?: estTotal ?: budget
         val paid = bill?.str("paid")?.toDoubleOrNull()
         val balance = bill?.str("balance")?.toDoubleOrNull() ?: (if (contract != null && paid != null) contract - paid else null)
         val moneyNote = when {
             bill != null -> "From the books" + (d.billing?.str("stage")?.let { ": $it" } ?: "") + "."
             estTotal != null -> "The estimate's total; nothing billed on record yet."
-            c?.num("budget") != null -> "The job's budget; no estimate or bill on record."
+            budget != null -> "The job's budget; no estimate or bill on record."
             else -> "No money on record for this job yet."
         }
         val draws = (est?.arrOf("payments") ?: bill?.arrOf("payments", "draws")).let { arr ->
@@ -281,7 +282,11 @@ object RoomFaces {
         return RoomFace(
             projectId = d.id, stage = stage, since = since,
             name = c?.str("client_name", "client")?.takeIf { it.isNotBlank() } ?: c?.str("name") ?: "Job #${d.id}",
-            what = what(c), addr = street, city = city,
+            what = what(c)?.takeUnless { w -> w.length < 6 || w.equals("job", true) }
+                ?: est?.str("title", "label", "name")
+                ?: d.estimates?.rowsOf("estimates")?.objects().orEmpty().filter { it.num("project_id")?.toInt() == d.id }.firstNotNullOfOrNull { it.str("title") }
+                ?: what(c),
+            addr = street, city = city,
             phone = c?.str("client_phone", "phone"), email = c?.str("client_email", "email") ?: d.client?.str("email"),
             contract = contract, paid = paid, balance = balance, moneyNote = moneyNote, draws = draws,
             nextWhen = nextWhen, nextWhat = nextWhat, needs = needs, blocks = emptyList(),
