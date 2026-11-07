@@ -15,8 +15,8 @@ android {
         applicationId = "com.wadecustomcarpentry.hocc"
         minSdk = 26
         targetSdk = 34
-        versionCode = 31
-        versionName = "0.7.4"
+        versionCode = 33
+        versionName = "0.7.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
