@@ -478,6 +478,58 @@ class RoomViewModel @Inject constructor(
     fun setStart(projectId: Int, date: String) =
         write(RoomCard.Schedule.key, { writers.post("hub/project/$projectId/schedule/start", JsonObject().apply { addProperty("start_date", date) }) }) { "Start date set." }
 
+    // ------------------------------------------------------------------ the Gantt's doors (Tyler, Nov 7 2026: the task-level Gantt)
+    // Every one is the office's own schedule writer through the hub door (schedule.py: one writer, each change kept in sched_edits
+    // with its before and after). The office replans after an item edit; the room reads the record again, and the plan engine
+    // (JobPlan) reflows the projection from what came back - the answer is never the state.
+
+    /** A task's estimated time, in his hours (the record keeps whole minutes). */
+    fun setItemEstimate(itemId: Long, hours: String) {
+        val h = hours.trim().toDoubleOrNull() ?: return
+        val body = JsonObject().apply { addProperty("est_minutes", Math.round(h * 60).toInt()) }
+        write(RoomCard.Schedule.key, { writers.patch("hub/items/$itemId", body) }) { "Estimate set to ${JobPlan.hrs(h)}; the plan moves with it." }
+    }
+
+    /** A task finished (or reopened). Only offered when the office's read carries finished_at on its items - the screen never
+     *  calls a door the record doesn't have. */
+    fun finishItem(itemId: Long, finished: Boolean) =
+        write(RoomCard.Schedule.key, { writers.patch("hub/items/$itemId", JsonObject().apply { addProperty("finished", finished) }) }) {
+            if (finished) "Marked finished; the rest of the plan reflows." else "Reopened."
+        }
+
+    /** Say which task an hours row was for (the hours themselves are not touched). itemId null unties it. */
+    fun linkHours(entryId: Long, itemId: Long?) =
+        write(RoomCard.Schedule.key, {
+            writers.post("hub/hours/$entryId/link", JsonObject().apply { if (itemId == null) add("item_id", com.google.gson.JsonNull.INSTANCE) else addProperty("item_id", itemId) })
+        }) { if (itemId == null) "Untied from the task." else "Tied to the task; its real hours count on the plan." }
+
+    /** Hours on one task: logged on the job (the hours door), then tied to the task when the office answers with the entry's id. */
+    fun logHoursOnItem(projectId: Int, itemId: Long, date: String, hours: String, note: String) {
+        val body = JsonObject().apply {
+            addProperty("work_date", date)
+            addProperty("hours", hours)
+            addProperty("category", "field")
+            addProperty("note", note)
+        }
+        write(RoomCard.Schedule.key, {
+            when (val r = writers.post("projects/$projectId/hours", body)) {
+                is ConnectorResult.Ok -> {
+                    val o = r.value.asObjOrNull()
+                    val eid = (o?.num("id", "time_entry_id", "entry_id") ?: o?.objOf("entry")?.num("id") ?: o?.objOf("time_entry")?.num("id"))?.toLong()
+                    if (eid == null) ConnectorResult.Ok(sayObj("Logged on the job. The office didn't name the entry, so tie it to the task from Time on site."))
+                    else when (val l = writers.post("hub/hours/$eid/link", JsonObject().apply { addProperty("item_id", itemId) })) {
+                        is ConnectorResult.Ok -> ConnectorResult.Ok(sayObj("Logged and tied to the task."))
+                        is ConnectorResult.Failed -> ConnectorResult.Ok(sayObj("Logged on the job, but tying it to the task was refused: ${l.error.message}"))
+                        is ConnectorResult.Queued -> l
+                    }
+                }
+                else -> r
+            }
+        }) { r -> r.asObjOrNull()?.str("say") ?: "Logged." }
+    }
+
+    private fun sayObj(text: String): JsonElement = JsonObject().apply { addProperty("say", text) }
+
     /** Caroline, about this job: the assist thread, framed with the job so she knows the room you're in. */
     fun tellCaroline(projectId: Int, jobName: String, text: String) {
         if (_busy.value != null) return
