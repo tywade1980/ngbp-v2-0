@@ -4,4 +4,6 @@
     <external-files-path name="updates" path="updates/" />
     <!-- Camera captures for Photo Documentation are written to cacheDir/images. -->
     <cache-path name="images" path="images/" />
+    <!-- The Office's newest HOCC build, saved by HoccViewModel.downloadUpdate before "Install it now" (UpdateInstall). -->
+    <cache-path name="hocc_updates" path="updates/" />
 </paths>

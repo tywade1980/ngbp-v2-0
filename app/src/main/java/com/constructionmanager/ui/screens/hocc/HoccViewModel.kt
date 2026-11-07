@@ -372,7 +372,7 @@ class HoccViewModel @Inject constructor(
         if (info.downloading) return
         _updateInfo.value = info.copy(downloading = true, error = null, downloadedPath = null)
         viewModelScope.launch {
-            val target = File(context.cacheDir, "hocc-update.apk")
+            val target = UpdateInstall.apkFile(context)
             when (val r = connector.downloadLatestApk(target, info.sha256)) {
                 is ConnectorResult.Ok -> _updateInfo.value = info.copy(downloading = false, downloadedPath = r.value.absolutePath)
                 is ConnectorResult.Failed -> _updateInfo.value = info.copy(downloading = false, error = r.error.message)
