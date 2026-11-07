@@ -1,5 +1,6 @@
 package com.constructionmanager.ui.screens.hocc
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,7 +87,9 @@ fun HoccRoot() {
             when (tab) {
                 HoccTab.Home -> HomeScreen(vm, roomVm, roomKey, onOpenRoom = goRoom)
                 HoccTab.Site -> SiteScreen(vm, onOpenJob = { id -> goRoom(oneJob(id, jobs.data?.objects().orEmpty())) })
-                HoccTab.Jobs -> JobsScreen(vm, openJobId = null, onOpenJob = { id -> goRoom(oneJob(id, jobs.data?.objects().orEmpty())) }, onCloseJob = {})
+                // the prototype's Leads and jobs list (Tyler, Nov 7 2026: "it shows it's basically a list of leads, not my jobs room"):
+                // his jobs by where each stands, leads folded under them; a tap opens that job's room
+                HoccTab.Jobs -> JobsTab(vm, roomKey?.startId ?: roomKey?.projectIds?.firstOrNull()) { id -> goRoom(oneJob(id, jobs.data?.objects().orEmpty())) }
                 HoccTab.Schedule -> ScheduleScreen(vm)
                 HoccTab.Caroline -> CarolineScreen(vm)
                 HoccTab.Office -> OfficeScreen(vm)
@@ -96,6 +99,21 @@ fun HoccRoot() {
     }
 }
 
+
+/** The Jobs tab: the job room's Leads and jobs list, full screen. */
+@Composable
+private fun JobsTab(vm: HoccViewModel, currentId: Int?, onOpen: (Int) -> Unit) {
+    val jobs by vm.jobs.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.loadJobs() }
+    var q by rememberSaveable { mutableStateOf("") }
+    var leads by rememberSaveable { mutableStateOf(false) }
+    val all = jobs.data?.objects().orEmpty()
+    Column(Modifier.fillMaxSize().background(Board.ground)) {
+        if (jobs.loading && all.isEmpty()) LoadingLine("Reading your jobs…")
+        jobs.error?.let { ErrorLine(it) { vm.loadJobs() } }
+        FaceJobsList(RoomFaces.list(all, java.time.LocalDate.now()), currentId, q, { q = it }, onOpen, null, leads, { leads = it }, Modifier.fillMaxSize())
+    }
+}
 
 /** A scrolling screen with its name and a way to read the record again - the shape every tab shares. */
 @Composable

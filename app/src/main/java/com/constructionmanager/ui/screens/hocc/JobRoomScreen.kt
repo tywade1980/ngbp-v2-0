@@ -118,13 +118,17 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
     // every live job's plan and tonight's office work (Tyler, Nov 7 2026: "across all project not just the one")
     val planBoard: PlanBoardViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     var tonight by rememberSaveable { mutableStateOf(false) }
+    // the prototype's Leads and jobs drawer, over the room's left edge
+    var jobsOpen by rememberSaveable { mutableStateOf(false) }
+    var jobsQuery by rememberSaveable { mutableStateOf("") }
+    var leadsOpen by rememberSaveable { mutableStateOf(false) }
     val logFocus = remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { room.remember(context); room.loadOrder(context); planBoard.load(context) }
     LaunchedEffect(selectedId) { selectedId?.let { room.open(it) } }
     LaunchedEffect(expanded) { if (expanded != RoomCard.Logs.key) logFocus.value = null }
-    BackHandler(enabled = tonight || clientOpen != null || expanded != null || wheel != Wheel.HOME.name) {
-        if (tonight) tonight = false else if (clientOpen != null) clientOpen = null else if (expanded != null) expanded = null else wheel = Wheel.HOME.name
+    BackHandler(enabled = jobsOpen || tonight || clientOpen != null || expanded != null || wheel != Wheel.HOME.name) {
+        if (jobsOpen) jobsOpen = false else if (tonight) tonight = false else if (clientOpen != null) clientOpen = null else if (expanded != null) expanded = null else wheel = Wheel.HOME.name
     }
     val openClient: (String?, String?) -> Unit = { phone, label -> clientOpen = phone ?: ("label:" + (label ?: "")) }
     val co = clientOpen
@@ -146,9 +150,12 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
             val board = maxWidth >= 600.dp && maxHeight >= 480.dp
             Column(Modifier.fillMaxSize()) {
                 val w = runCatching { Wheel.valueOf(wheel) }.getOrDefault(Wheel.HOME)
-                HeaderBar(projects.count { it.boolOf("open") == true }, board,
+                val ex0 = expanded?.let { RoomCard.byKey(it) }
+                // the prototype's face draws its own header (Leads and jobs, today, Tonight's office work); the pages keep the bar with Back
+                val showFace = !tonight && ex0 == null && data != null && id != null
+                if (!showFace) HeaderBar(projects.count { it.boolOf("open") == true }, board,
                     onBack = if (tonight) ({ tonight = false }) else if (expanded != null) ({ expanded = null }) else if (w != Wheel.HOME) ({ wheel = Wheel.HOME.name }) else onBack,
-                    onLeads = { tonight = false; expanded = null; wheel = Wheel.LEADS.name }, onRefresh = { room.refresh(); planBoard.load(context, force = true) }, writing = busy != null,
+                    onLeads = { tonight = false; expanded = null; jobsOpen = true }, onRefresh = { room.refresh(); planBoard.load(context, force = true) }, writing = busy != null,
                     onTonight = { tonight = !tonight; expanded = null })
                 if (key.projectIds.size > 1) {
                     LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -174,80 +181,44 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                     ex != null && data != null && id != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
                         CardFor(ex, room, data, busy, full = true, onOpen = {})
                     }
-                    board -> Box(Modifier.fillMaxSize()) {
-                        androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) {
-                            BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
-                        }
-                        // the Clients drawer of his design file: the leads and clients by where each stands, over the board's left edge
-                        if (w != Wheel.HOME) {
-                            Box(Modifier.fillMaxSize().background(Color(0x731B2229)).clickable { wheel = Wheel.HOME.name })
-                            Column(Modifier.fillMaxHeight().width(360.dp).background(Color.White).verticalScroll(rememberScrollState()).padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Disp("Clients", 26, modifier = Modifier.weight(1f))
-                                    Tool("Close") { wheel = Wheel.HOME.name }
-                                }
-                                LeadsPage(projects, id, pick, room, busy != null)
-                            }
-                        }
+                    data != null && id != null -> Box(Modifier.fillMaxSize()) {
+                        // THE PROTOTYPE'S JOB ROOM (approved Nov 7 2026): read-only dashboard, a tap opens the card's page
+                        val plans by planBoard.state.collectAsState()
+                        val handled by planBoard.handled.collectAsState()
+                        val order by room.order.collectAsState()
+                        val today = LocalDate.now()
+                        val cp = plans?.data
+                        val myPlan = remember(data) { data.plan(today).first }
+                        val allPlans = planBoard.plansWith(myPlan)
+                        val tonightItems = remember(cp, handled) { planBoard.items() }
+                        val face = remember(data, myPlan, allPlans, tonightItems) { RoomFaces.build(data, myPlan, allPlans, tonightItems, today) }
+                        val nextAppt = cp?.appointments?.mapNotNull { a -> a.str("start_at")?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { it to a } }
+                            ?.filter { it.first >= today }?.minByOrNull { it.first }
+                            ?.let { (dd, a) -> RoomFaces.fmt(dd) + ", " + (a.str("name", "title") ?: "appointment") }
+                        val header = FaceHeader(today, projects.count { RoomFaces.listItem(it, today)?.stage.let { s -> s != null && s != FaceStage.Done } },
+                            dayLine(allPlans, today), nextAppt, tonightItems.size)
+                        val faceOrder = order.mapNotNull { rc -> FaceCard.values().firstOrNull { it.room == rc } }.let { saved ->
+                            if (order == RoomCard.DEFAULT) FaceCard.ORDER else saved + FaceCard.ORDER.filter { it !in saved } }
+                        val auth = room.authHeader()
+                        JobRoomFace(face, header, wide = board, order = faceOrder,
+                            onOpen = { c -> expanded = c.room.key },
+                            onMove = { c, delta -> room.move(context, c.room, up = delta < 0) },
+                            onJobs = { jobsOpen = true }, onTonight = { tonight = true; expanded = null },
+                            photo = { itemId ->
+                                val req = ImageRequest.Builder(context).data(room.photoUrl(itemId)).apply { if (auth != null) addHeader("Authorization", auth) }.crossfade(true).build()
+                                AsyncImage(model = req, contentDescription = null, modifier = Modifier.fillMaxSize())
+                            })
                     }
-                    else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) { androidx.compose.runtime.key(wheel) {
-                        // the phone: a wheel is three pages - left spoke, hub, right spoke - opened on the hub. Swipe or tap a name.
-                        val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 1) { 3 }
-                        PageStrip(w, pager.currentPage, onGo = { scope.launch { pager.animateScrollToPage(it) } }, onUp = { wheel = Wheel.HOME.name })
-                        androidx.compose.foundation.pager.HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondBoundsPageCount = 1) { page ->
-                            val open: (Wheel) -> Unit = { wheel = it.name }
-                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                when (w) {
-                                    // PARENT AND CHILD (Tyler, Nov 4 2026): a hub's left and right are its two closest children; the bottom wheel is
-                                    // the rest; any child opened is a hub of its own. Everything within three taps of home.
-                                    Wheel.HOME -> when (page) {
-                                        0 -> { OpenSpoke("Leads", "Open the leads wheel: new callers on its left, the clients on its right, site visits below.") { open(Wheel.LEADS) }
-                                               LeadsPage(projects, id, pick, room, busy != null) }
-                                        1 -> if (data != null) {
-                                            CardFor(RoomCard.Vitals, room, data, busy, false) { expanded = RoomCard.Vitals.key }
-                                            CardFor(RoomCard.Caroline, room, data, busy, false) { expanded = RoomCard.Caroline.key }
-                                            OpenSpoke("Schedule", "Open the schedule wheel: daily logs on its left, the punch list on its right, the week below.") { open(Wheel.SCHEDULE) }
-                                            CardFor(RoomCard.Schedule, room, data, busy, false) { expanded = RoomCard.Schedule.key }
-                                            CardFor(RoomCard.Logs, room, data, busy, false) { expanded = RoomCard.Logs.key }
-                                            CardFor(RoomCard.Punch, room, data, busy, false) { expanded = RoomCard.Punch.key }
-                                            CardFor(RoomCard.SiteHours, room, data, busy, false) { expanded = RoomCard.SiteHours.key }
-                                        }
-                                        else -> if (data != null) {
-                                            OpenSpoke("Estimate", "Open the estimate wheel: scope and takeoff on its left, the money on its right, selections and photos below.") { open(Wheel.ESTIMATES) }
-                                            CardFor(RoomCard.Estimate, room, data, busy, false) { expanded = RoomCard.Estimate.key }
-                                            CardFor(RoomCard.Scope, room, data, busy, false) { expanded = RoomCard.Scope.key }
-                                            CardFor(RoomCard.Selections, room, data, busy, false) { expanded = RoomCard.Selections.key }
-                                            CardFor(RoomCard.Photos, room, data, busy, false) { expanded = RoomCard.Photos.key }
-                                            CardFor(RoomCard.Texts, room, data, busy, false) { expanded = RoomCard.Texts.key }
-                                            CardFor(RoomCard.Calls, room, data, busy, false) { expanded = RoomCard.Calls.key }
-                                            CardFor(RoomCard.Recordings, room, data, busy, false) { expanded = RoomCard.Recordings.key }
-                                        }
-                                    }
-                                    Wheel.LEADS -> when (page) {
-                                        0 -> NewCallersPage(readJson)
-                                        1 -> { LeadsPage(projects, id, pick, room, busy != null); Lbl("Site visits", modifier = Modifier.padding(top = 4.dp)); VisitsStrip(readJson, 14) }
-                                        else -> ClientsPage(projects, id, pick)
-                                    }
-                                    Wheel.ESTIMATES -> if (data != null) when (page) {
-                                        0 -> { CardFor(RoomCard.Scope, room, data, busy, true) {} }
-                                        1 -> { CardFor(RoomCard.Estimate, room, data, busy, true) {}
-                                               Lbl("Under the estimate", modifier = Modifier.padding(top = 4.dp))
-                                               CardFor(RoomCard.Selections, room, data, busy, false) { expanded = RoomCard.Selections.key }
-                                               CardFor(RoomCard.Photos, room, data, busy, false) { expanded = RoomCard.Photos.key } }
-                                        else -> MoneyPage(room, data, busy != null)
-                                    }
-                                    Wheel.SCHEDULE -> if (data != null) when (page) {
-                                        0 -> CardFor(RoomCard.Logs, room, data, busy, true) {}
-                                        1 -> { CardFor(RoomCard.Schedule, room, data, busy, true) {}; Lbl("This week", modifier = Modifier.padding(top = 4.dp)); VisitsStrip(readJson, 7) }
-                                        else -> CardFor(RoomCard.Punch, room, data, busy, true) {}
-                                    }
-                                }
-                                Spacer(Modifier.height(24.dp))
-                            }
-                        }
-                    } }
                 }
+            }
+            if (jobsOpen) {
+                val today = LocalDate.now()
+                Box(Modifier.fillMaxSize().background(Color(0x801B2229)).clickable { jobsOpen = false })
+                FaceJobsList(RoomFaces.list(projects, today), id, jobsQuery, { jobsQuery = it },
+                    onPick = { pid -> jobsOpen = false; expanded = null; tonight = false; wheel = Wheel.HOME.name
+                        onOpenRoom(RoomKey(RoomKey.JOB, projects.firstOrNull { it.num("id")?.toInt() == pid }?.str("name") ?: "Job #$pid", listOf(pid), pid)) },
+                    onClose = { jobsOpen = false }, leadsOpen = leadsOpen, onLeadsOpen = { leadsOpen = it },
+                    modifier = Modifier.fillMaxHeight().width(minOf(380.dp, maxWidth * 0.9f)))
             }
         }
     }
