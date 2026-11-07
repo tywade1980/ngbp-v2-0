@@ -35,6 +35,9 @@ fun HomeScreen(vm: HoccViewModel, room: RoomViewModel, roomKey: RoomKey?, onOpen
         else launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
     val all = jobs.data?.objects().orEmpty()
+    // a job whose standing changed (archived, removed, reopened, moved on) leaves or rejoins the lists at once
+    val jobsChanged by room.jobsChanged.collectAsState()
+    LaunchedEffect(jobsChanged) { if (jobsChanged > 0) vm.loadJobs(force = true) }
 
     // no room chosen yet: choose the one the facts point at, once the jobs are in hand
     val matched = here.matched
