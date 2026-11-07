@@ -169,7 +169,7 @@ object RoomFaces {
         val moneyNote = when {
             bill != null -> "From the books" + (d.billing?.str("stage")?.let { ": $it" } ?: "") + "."
             estTotal != null -> "The estimate's total; nothing billed on record yet."
-            budget != null -> "The job's budget; no estimate or bill on record."
+            budget != null -> "The job's budget; no priced estimate or bill on record."
             else -> "No money on record for this job yet."
         }
         val draws = (est?.arrOf("payments") ?: bill?.arrOf("payments", "draws")).let { arr ->
