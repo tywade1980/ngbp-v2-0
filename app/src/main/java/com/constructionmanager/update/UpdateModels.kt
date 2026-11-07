@@ -36,7 +36,10 @@ data class AvailableUpdate(
     val apkUrl: String,
     val mandatory: Boolean,
     val sizeBytes: Long,
-    val source: UpdateSource
+    val source: UpdateSource,
+    /** Published on the Office (hocc_app.py publish); downloaded with this phone's token, checked against [sha256]. */
+    val fromOffice: Boolean = false,
+    val sha256: String? = null
 )
 
 /** UI-facing state machine covering the whole update lifecycle. */

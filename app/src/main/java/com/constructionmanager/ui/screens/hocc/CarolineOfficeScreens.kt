@@ -41,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import com.constructionmanager.BuildConfig
 import com.constructionmanager.data.caroline.CallSummary
 import com.constructionmanager.data.caroline.serverTimeToLocal
@@ -174,6 +173,7 @@ fun OfficeScreen(vm: HoccViewModel) {
         state.error?.let { ErrorLine(it) { vm.loadOffice() } }
         val d = state.data
 
+        var installNote by remember { mutableStateOf<String?>(null) }
         HoccCard("This app") {
             Text("HOCC ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) is what's installed on this phone.", style = MaterialTheme.typography.bodyMedium)
             val u = upd
@@ -189,7 +189,11 @@ fun OfficeScreen(vm: HoccViewModel) {
                     u.size?.let { Text("${String.format("%.1f", it / 1_000_000.0)} MB", style = MaterialTheme.typography.bodySmall) }
                     when {
                         u.downloading -> LoadingLine("Downloading the new build…")
-                        u.downloadedPath != null -> { val path = u.downloadedPath; Button(onClick = { if (path != null) installApk(context, File(path)) }) { Text("Install it now") } }
+                        u.downloadedPath != null -> {
+                            val path = u.downloadedPath
+                            Button(onClick = { if (path != null) installNote = UpdateInstall.install(context, File(path)) }) { Text("Install it now") }
+                            installNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                        }
                         else -> Button(onClick = { vm.downloadUpdate(context) }) { Text("Download & install") }
                     }
                 }
@@ -245,13 +249,6 @@ fun OfficeScreen(vm: HoccViewModel) {
 }
 
 /** Hand the downloaded build to Android's installer, through the app's own file provider. */
-private fun installApk(context: Context, file: File) {
-    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-    val intent = Intent(Intent.ACTION_VIEW)
-        .setDataAndType(uri, "application/vnd.android.package-archive")
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
-}
 
 
 @Composable

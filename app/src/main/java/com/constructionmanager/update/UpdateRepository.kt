@@ -3,6 +3,8 @@ package com.constructionmanager.update
 import android.content.Intent
 import android.util.Log
 import com.constructionmanager.BuildConfig
+import com.constructionmanager.data.caroline.CarolineConnector
+import com.constructionmanager.data.caroline.ConnectorResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +25,7 @@ class UpdateRepository @Inject constructor(
     private val config: UpdateConfig,
     private val installer: ApkInstaller,
     private val playUpdateManager: PlayUpdateManager,
+    private val connector: CarolineConnector,
     okHttpClient: OkHttpClient
 ) {
     // The manifest is fetched via an absolute @Url, so this base URL is only a Retrofit formality.
@@ -65,6 +68,21 @@ class UpdateRepository @Inject constructor(
             }
         }
 
+        // The Office is where HOCC builds are published (hocc_app.py publish). A paired phone asks it first; its answer
+        // stands, newer or not. The GitHub manifest is only the fallback for an unpaired phone or an unreachable Office.
+        if (connector.isPaired) {
+            val read = OfficeUpdate.read(connector.hoccLatest().valueOrNull(), currentVersionCode, BuildConfig.APPLICATION_ID)
+            if (read.update != null) {
+                return if (read.newer) {
+                    _status.value = UpdateStatus.Available(read.update)
+                    read.update
+                } else {
+                    _status.value = UpdateStatus.UpToDate(currentVersionName, currentVersionCode)
+                    null
+                }
+            }
+        }
+
         return try {
             val manifest = api.fetchManifest(config.manifestUrl)
             val isNewer = manifest.versionCode > currentVersionCode && manifest.apkUrl.isNotBlank()
@@ -93,6 +111,16 @@ class UpdateRepository @Inject constructor(
 
     /** Downloads the APK for a self-hosted update, streaming progress into [status]. */
     suspend fun download(update: AvailableUpdate) {
+        if (update.fromOffice) {
+            _status.value = UpdateStatus.Downloading(-1)
+            val target = installer.targetFile(update.versionCode)
+            _status.value = when (val r = connector.downloadLatestApk(target, update.sha256)) {
+                is ConnectorResult.Ok -> { lastDownloaded = r.value; UpdateStatus.ReadyToInstall(update) }
+                is ConnectorResult.Failed -> UpdateStatus.Failed(r.error.message)
+                is ConnectorResult.Queued -> UpdateStatus.Failed("The download could not start.")
+            }
+            return
+        }
         if (update.source != UpdateSource.SELF_HOSTED || update.apkUrl.isBlank()) return
         _status.value = UpdateStatus.Downloading(-1)
         installer.download(update.apkUrl, update.versionCode).collect { progress ->

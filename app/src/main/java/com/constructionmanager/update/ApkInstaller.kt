@@ -48,9 +48,14 @@ class ApkInstaller @Inject constructor(
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+    /** Where an update APK is saved: app-specific external files/updates/, shared by res/xml/file_paths.xml. */
+    fun targetFile(versionCode: Int): File {
+        val dir = File(context.getExternalFilesDir(null) ?: context.cacheDir, "updates").apply { mkdirs() }
+        return File(dir, "constructpro-$versionCode.apk")
+    }
+
     fun download(apkUrl: String, versionCode: Int): Flow<DownloadProgress> = flow {
-        val dir = File(context.getExternalFilesDir(null), "updates").apply { mkdirs() }
-        val dest = File(dir, "constructpro-$versionCode.apk")
+        val dest = targetFile(versionCode)
         if (dest.exists()) dest.delete()
 
         val request = DownloadManager.Request(Uri.parse(apkUrl))
