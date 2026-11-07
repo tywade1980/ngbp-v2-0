@@ -91,3 +91,4 @@ lint/tmp/
 
 # Mac
 .DS_Store
+app/src/test/snapshots/
