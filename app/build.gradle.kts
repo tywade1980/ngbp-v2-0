@@ -5,6 +5,7 @@ plugins {
     id("dagger.hilt.android.plugin")
     id("androidx.room")
     id("kotlinx-serialization")
+    id("app.cash.paparazzi")
 }
 
 android {
