@@ -243,8 +243,8 @@ private fun CardShell(c: FaceCard, wide: Boolean, modifier: Modifier, onOpen: (F
             if (wide) Text(if (c == FaceCard.Caro) "Front desk · voice first" else "Kept by ${c.owner}", fontFamily = Board.sans, fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp, color = Face.mute, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 modifier = Modifier.weight(1f))
-            else Spacer(Modifier.weight(1f))
             else {
+                Spacer(Modifier.weight(1f))
                 IconBox(Icons.Default.KeyboardArrowUp, "Move ${c.title} up") { onMove(c, -1) }
                 IconBox(Icons.Default.KeyboardArrowDown, "Move ${c.title} down") { onMove(c, 1) }
             }
