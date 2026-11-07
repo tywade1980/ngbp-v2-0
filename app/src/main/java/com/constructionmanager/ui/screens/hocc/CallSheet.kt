@@ -76,7 +76,9 @@ fun CallSheetsPage(readJson: (suspend (String) -> JsonObject?)?, room: RoomViewM
     BoardCard {
         Disp("Calls", 24)
         val moved = data?.num("moved_to_leads")?.toInt() ?: 0
-        Text("Every call as a filled-in sheet. Tap one to see it or fill a blank." + (if (moved > 0) " $moved moved on to Leads." else ""),
+        val spam = data?.num("spam_kept_out")?.toInt() ?: 0
+        Text("Every call as a filled-in sheet. Tap one to see it or fill a blank." + (if (moved > 0) " $moved moved on to Leads." else "") +
+            (if (spam > 0) " $spam spam calls kept out of view." else ""),
             style = MaterialTheme.typography.bodySmall, color = Board.grey)
         if (room != null) Solid("+ New call sheet", Board.blue, modifier = Modifier.heightIn(min = 36.dp)) { onOpen("new") }
         val rows = data?.arrOf("sheets")?.objects().orEmpty()
