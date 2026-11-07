@@ -50,11 +50,17 @@ enum class RoomCard(val key: String, val label: String) {
     Selections("materials", "Selections"),
     Photos("photos", "Photos"),
     Logs("hours", "Daily logs"),
-    Punch("punch", "Punch list");
+    Punch("punch", "Punch list"),
+    // the job's file (Tyler, Nov 6 2026: "each jobs sheets with each clients projects ... and the text records and the call logs and
+    // once we get recordings figured out those also" - "each will be a peripheral card around that center card")
+    SiteHours("sitehours", "Job site hours"),
+    Texts("texts", "Texts"),
+    Calls("calls", "Call log"),
+    Recordings("recordings", "Recordings");
 
     companion object {
         /** The phone order of his design file (Oct 9 2026): client, Caroline, estimates, schedule, scope, selections, photos, logs. */
-        val DEFAULT = listOf(Vitals, Caroline, Estimate, Schedule, Scope, Selections, Photos, Logs, Punch)
+        val DEFAULT = listOf(Vitals, Caroline, Estimate, Schedule, Scope, Selections, Photos, Logs, Punch, SiteHours, Texts, Calls, Recordings)
         fun byKey(k: String): RoomCard? = values().firstOrNull { it.key == k }
     }
 }
@@ -75,7 +81,9 @@ data class RoomData(
     val materials: JsonElement?,      // GET projects/{id}/materials
     val attachments: JsonElement?,    // GET attachments?kind=project&ref=
     val tasks: JsonElement?,          // GET projects/{id}/tasks
-    val thread: JsonElement?          // GET assist/thread
+    val thread: JsonElement?,         // GET assist/thread
+    val comms: JsonObject? = null,    // GET log/people/{phone} - the client's texts and calls, one list (kind text|call)
+    val siteHours: JsonElement? = null // GET site-hours?project_id= - the job's timesheet from the location history (clients -> projects -> days)
 )
 
 /** A short line the room shows after a write: what the door said, in its words. */
@@ -193,10 +201,12 @@ class RoomViewModel @Inject constructor(
         val atts = connector.getJson("attachments?kind=project&ref=$id").valueOrNull()
         val tasks = connector.getJson("projects/$id/tasks").valueOrNull()
         val thread = connector.getJson("assist/thread?limit=40").valueOrNull()
+        val comms = if (phone != null) connector.getJson("log/people/" + Uri.encode(phone) + "?limit=800").valueOrNull()?.asObjOrNull() else null
+        val siteHours = connector.getJson("site-hours?project_id=$id").valueOrNull()
         _room.value = SectionState(
             loading = false,
             error = (card as? ConnectorResult.Failed)?.error?.message,
-            data = RoomData(id, cardObj, client, billing, schedule, null, hours, clock, takeoffs, takeoff, estimates, estimate, materials, atts, tasks, thread)
+            data = RoomData(id, cardObj, client, billing, schedule, null, hours, clock, takeoffs, takeoff, estimates, estimate, materials, atts, tasks, thread, comms, siteHours)
         )
     }
 

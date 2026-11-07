@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -134,7 +135,9 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
 
     Column(Modifier.fillMaxSize().background(Board.ground).imePadding()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val board = maxWidth >= 700.dp && maxHeight >= 600.dp
+            // the Fold's open screen (Tyler, Nov 6 2026: "this is what i wanna see in hocc when i open the fold to is its whole screen"). The
+            // Fold7's inner screen reads ~650-750 dp wide depending on its screen zoom, so 700 dp missed it; the cover screen is ~410 dp.
+            val board = maxWidth >= 600.dp && maxHeight >= 480.dp
             Column(Modifier.fillMaxSize()) {
                 val w = runCatching { Wheel.valueOf(wheel) }.getOrDefault(Wheel.HOME)
                 HeaderBar(projects.count { it.boolOf("open") == true }, board,
@@ -163,7 +166,23 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                     ex != null && data != null && id != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
                         CardFor(ex, room, data, busy, full = true, onOpen = {})
                     }
-                    board -> BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
+                    board -> Box(Modifier.fillMaxSize()) {
+                        androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) {
+                            BoardLayout(room, data, busy, projects, id, pick, onOpen = { expanded = it.key })
+                        }
+                        // the Clients drawer of his design file: the leads and clients by where each stands, over the board's left edge
+                        if (w != Wheel.HOME) {
+                            Box(Modifier.fillMaxSize().background(Color(0x731B2229)).clickable { wheel = Wheel.HOME.name })
+                            Column(Modifier.fillMaxHeight().width(360.dp).background(Color.White).verticalScroll(rememberScrollState()).padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Disp("Clients", 26, modifier = Modifier.weight(1f))
+                                    Tool("Close") { wheel = Wheel.HOME.name }
+                                }
+                                LeadsPage(projects, id, pick, room, busy != null)
+                            }
+                        }
+                    }
                     else -> androidx.compose.runtime.CompositionLocalProvider(LocalOpenClient provides openClient) { androidx.compose.runtime.key(wheel) {
                         // the phone: a wheel is three pages - left spoke, hub, right spoke - opened on the hub. Swipe or tap a name.
                         val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 1) { 3 }
@@ -184,6 +203,7 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                             CardFor(RoomCard.Schedule, room, data, busy, false) { expanded = RoomCard.Schedule.key }
                                             CardFor(RoomCard.Logs, room, data, busy, false) { expanded = RoomCard.Logs.key }
                                             CardFor(RoomCard.Punch, room, data, busy, false) { expanded = RoomCard.Punch.key }
+                                            CardFor(RoomCard.SiteHours, room, data, busy, false) { expanded = RoomCard.SiteHours.key }
                                         }
                                         else -> if (data != null) {
                                             OpenSpoke("Estimate", "Open the estimate wheel: scope and takeoff on its left, the money on its right, selections and photos below.") { open(Wheel.ESTIMATES) }
@@ -191,6 +211,9 @@ fun JobRoomScreen(room: RoomViewModel, key: RoomKey, projects: List<JsonObject>,
                                             CardFor(RoomCard.Scope, room, data, busy, false) { expanded = RoomCard.Scope.key }
                                             CardFor(RoomCard.Selections, room, data, busy, false) { expanded = RoomCard.Selections.key }
                                             CardFor(RoomCard.Photos, room, data, busy, false) { expanded = RoomCard.Photos.key }
+                                            CardFor(RoomCard.Texts, room, data, busy, false) { expanded = RoomCard.Texts.key }
+                                            CardFor(RoomCard.Calls, room, data, busy, false) { expanded = RoomCard.Calls.key }
+                                            CardFor(RoomCard.Recordings, room, data, busy, false) { expanded = RoomCard.Recordings.key }
                                         }
                                     }
                                     Wheel.LEADS -> when (page) {
@@ -376,7 +399,7 @@ private fun HeaderBar(openCount: Int, board: Boolean, onBack: (() -> Unit)?, onL
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (onBack != null) IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Board.ink) }
-        Solid(if (board) "☰  Leads  $openCount" else "☰ Leads $openCount", Board.ink, onClick = onLeads)
+        Solid(if (board) "☰  Clients  $openCount" else "☰ Leads $openCount", Board.ink, onClick = onLeads)
         Column(Modifier.weight(1f)) {
             if (board) Lbl("Today is")
             Disp(dayLine, if (board) 24 else 17, maxLines = 1)
@@ -468,31 +491,27 @@ private fun LeadRow(p: JsonObject, cur: Boolean, onPick: (RoomKey) -> Unit) {
 
 @Composable
 private fun BoardLayout(room: RoomViewModel, d: RoomData?, busy: String?, projects: List<JsonObject>, currentId: Int?, onPick: (RoomKey) -> Unit, onOpen: (RoomCard) -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(Modifier.weight(1f)) { LeadsPage(projects, currentId, onPick, room, busy != null) }
-            Column(Modifier.weight(2.1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (d != null) {
-                    CardFor(RoomCard.Vitals, room, d, busy, false) { onOpen(RoomCard.Vitals) }
-                    CardFor(RoomCard.Caroline, room, d, busy, false) { onOpen(RoomCard.Caroline) }
-                }
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (d != null) {
-                    CardFor(RoomCard.Estimate, room, d, busy, false) { onOpen(RoomCard.Estimate) }
-                    CardFor(RoomCard.Scope, room, d, busy, false) { onOpen(RoomCard.Scope) }
-                    CardFor(RoomCard.Selections, room, d, busy, false) { onOpen(RoomCard.Selections) }
-                    CardFor(RoomCard.Photos, room, d, busy, false) { onOpen(RoomCard.Photos) }
-                }
-            }
-        }
+    // HIS DESIGN FILE'S GRID (Oct 9 2026, "Wade OS Job Board"; Nov 6: "this is what i wanna see in hocc when i open the fold"): estimates,
+    // job schedule and daily logs down the left; the job card spanning two rows in the centre with Caroline under it; scope, selections and
+    // photos down the right. Under them, the job's file around the same centre (Nov 6: "each will be a peripheral card around that center
+    // card"): job site hours | call log | texts, then the punch list | recordings.
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp)) {
+        // no early return out of this inline Column (it unbalances the composer's groups on this Compose version)
         if (d != null) {
-            Lbl("Scheduling")
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1.3f)) { CardFor(RoomCard.Schedule, room, d, busy, false) { onOpen(RoomCard.Schedule) } }
-                Column(Modifier.weight(1f)) { CardFor(RoomCard.Logs, room, d, busy, false) { onOpen(RoomCard.Logs) } }
-                Column(Modifier.weight(1f)) { CardFor(RoomCard.Punch, room, d, busy, false) { onOpen(RoomCard.Punch) } }
-            }
+        val cards = listOf(
+            RoomCard.Estimate to Area(0, 0), RoomCard.Vitals to Area(1, 0, 2), RoomCard.Scope to Area(2, 0),
+            RoomCard.Schedule to Area(0, 1), RoomCard.Selections to Area(2, 1),
+            RoomCard.Logs to Area(0, 2), RoomCard.Caroline to Area(1, 2), RoomCard.Photos to Area(2, 2),
+            RoomCard.SiteHours to Area(0, 3), RoomCard.Calls to Area(1, 3), RoomCard.Texts to Area(2, 3),
+            RoomCard.Punch to Area(0, 4), RoomCard.Recordings to Area(1, 4),
+        )
+        // the design's 1 : 2.1 : 1 is drawn at 1480 px; on the Fold's ~750 dp the side cards would get ~165 dp, too narrow for their
+        // rows, so the side columns take a little more under 1100 dp (the centre card still the widest, as drawn)
+        val w = LocalConfiguration.current.screenWidthDp
+        HubGrid(cards.map { it.second }, gap = if (w < 1100) 10.dp else 14.dp,
+            weights = if (w < 1100) listOf(1.2f, 2f, 1.2f) else listOf(1f, 2.1f, 1f), modifier = Modifier.fillMaxWidth()) {
+            cards.forEach { (c, _) -> Box { CardFor(c, room, d, busy, false) { onOpen(c) } } }
+        }
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -511,10 +530,39 @@ private fun CardFor(c: RoomCard, room: RoomViewModel, d: RoomData, busy: String?
         RoomCard.Photos -> PhotosCard(room, d, writing, full, onOpen)
         RoomCard.Logs -> LogsCard(room, d, writing, full, onOpen)
         RoomCard.Punch -> PunchCard(room, d, writing, full, onOpen)
+        RoomCard.SiteHours -> SiteHoursCard(d, full, onOpen)
+        RoomCard.Texts -> TextsCard(d, full, onOpen)
+        RoomCard.Calls -> CallsCard(d, full, onOpen)
+        RoomCard.Recordings -> RecordingsCard(d, full, onOpen)
     }
 }
 
 private fun firstName(c: JsonObject?): String = (c?.str("client_name", "client") ?: "").trim().substringBefore(' ').ifBlank { "the client" }
+
+/** The local day (yyyy-mm-dd) of a stored time, in this phone's zone; "" when it can't be read. */
+private fun localDayOf(raw: String?): String = try {
+    raw?.let { java.time.OffsetDateTime.parse(it.replace(' ', 'T')).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate().toString() } ?: ""
+} catch (e: Exception) { raw?.take(10) ?: "" }
+
+/** An appointment's day and time as he reads them ("Nov 9 10:00 AM"). */
+private fun apptWhen(a: JsonObject): String? {
+    val raw = a.str("start_at", "start", "at", "when") ?: return null
+    return try {
+        val t = java.time.OffsetDateTime.parse(raw.replace(' ', 'T')).atZoneSameInstant(java.time.ZoneId.systemDefault())
+        t.format(MDAY) + " " + t.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+    } catch (e: Exception) { d8(raw) }
+}
+
+@Composable
+private fun CalRow(whenText: String, what: String, color: Color, dot: Color) {
+    Row(Modifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(dot))
+        Num(whenText, 13, color = color, modifier = Modifier.width(112.dp))
+        if (what.isNotBlank()) Text(what, style = MaterialTheme.typography.bodyMedium, color = if (color == Board.grey) Board.grey else Board.body)
+    }
+}
+
+private fun apptWhat(a: JsonObject): String? = a.str("name", "title", "what", "summary")
 
 private fun d8(iso: String?): String? = iso?.take(10)?.let { runCatching { LocalDate.parse(it).format(MDAY) }.getOrNull() }
 
@@ -557,9 +605,17 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             Num(listOfNotNull(phone, c?.str("client_email", "email") ?: "no email on file").joinToString(" · "), 13, Color.White.copy(alpha = 0.95f), FontWeight.Normal)
         }
         // NEXT
-        val appts = c?.arrOf("appointments")?.objects().orEmpty()
+        // the company calendar opens on today (Tyler, Nov 6 2026: "why the company calendar sits in sept 14th is wild"): the record
+        // gives start_at and name, newest first; read those, put them in time order, and start two before today
+        val apptsAll = c?.arrOf("appointments")?.objects().orEmpty()
+            .filter { (it.str("status") ?: "") != "cancelled" }
+            .sortedBy { it.str("start_at", "start", "at", "when") ?: "" }
+        val todayIso = LocalDate.now().toString()
+        val firstUpcoming = apptsAll.indexOfFirst { (it.str("start_at", "start", "at", "when") ?: "").let { s -> localDayOf(s) >= todayIso } }
+        val appts = if (firstUpcoming < 0) apptsAll.takeLast(2) else apptsAll.drop(maxOf(0, firstUpcoming - 2))
+        val upcoming = if (firstUpcoming < 0) emptyList() else apptsAll.drop(firstUpcoming)
         val tasks = d.tasks?.rowsOf("tasks")?.objects().orEmpty().filter { it.str("status") != "Completed" }
-        val next = appts.firstOrNull()?.let { a -> listOfNotNull(d8(a.str("start", "at", "when")), a.str("title", "what", "summary")).joinToString(" ") }
+        val next = upcoming.firstOrNull()?.let { a -> listOfNotNull(apptWhen(a), apptWhat(a)).joinToString(" ") }
             ?: tasks.firstOrNull()?.str("title")
         Row(Modifier.fillMaxWidth().background(Board.ink).padding(horizontal = 20.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Lbl("Next", Color(0xFFAEB8C2))
@@ -582,7 +638,12 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             val paid = bill?.str("paid")?.toDoubleOrNull()
             val balance = bill?.str("balance")?.toDoubleOrNull() ?: (if (contract != null && paid != null) contract - paid else null)
             val hourRows = d.hours?.rowsOf("entries")?.objects().orEmpty()
-            val hours = hourRows.sumOf { it.num("hours") ?: 0.0 }
+            // hours from his location history and hours from anywhere else (Houzz, calls, the clock) are never added together: the
+            // tile shows the job site hours when there are any, and the line under it names the rest (Nov 6 2026, the hours thread)
+            val locHours = hourRows.filter { it.str("source_kind") == "location" }.sumOf { it.num("hours") ?: 0.0 }
+            val otherHours = hourRows.filter { it.str("source_kind") != "location" }.sumOf { it.num("hours") ?: 0.0 }
+            val hours = if (locHours > 0.0) locHours else otherHours
+            val hoursLabel = if (locHours > 0.0) "Hours on site" else "Hours worked"
             val approx = bill == null
             // four tiles: one row when the card is wide, two by two on the phone (a four-across row wraps the dollars letter by letter)
             BoxWithConstraints { if (maxWidth >= 520.dp) {
@@ -590,7 +651,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     Tile("Contract", money(contract), modifier = Modifier.weight(1f), approx = approx && contract != null)
                     Tile("Paid", money(paid ?: 0.0), Board.green, Modifier.weight(1f), approx = approx)
                     Tile("Balance", money(balance), Board.rust, Modifier.weight(1f), approx = approx && balance != null)
-                    Tile("Hours worked", fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
+                    Tile(hoursLabel, fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -600,7 +661,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Tile("Balance", money(balance), Board.rust, Modifier.weight(1f), approx = approx && balance != null)
-                        Tile("Hours worked", fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
+                        Tile(hoursLabel, fmtH(hours).replace(" h", " hr"), modifier = Modifier.weight(1f))
                     }
                 }
             } }
@@ -611,28 +672,27 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
                     contract != null -> "Money is the job's budget; no estimate on file."
                     else -> "No money on file for this job yet."
                 }, style = MaterialTheme.typography.bodySmall, color = Board.grey)
-                Text("Hours: " + (hourRows.firstOrNull()?.str("work_date")?.let { "logged through " + (d8(it) ?: it) } ?: "none logged yet") + " · ${hourRows.size} entries",
+                Text("Hours: " + (hourRows.firstOrNull()?.str("work_date")?.let { "logged through " + (d8(it) ?: it) } ?: "none logged yet") + " · ${hourRows.size} entries" +
+                    (if (locHours > 0.0 && otherHours > 0.0) " · ${fmtH(otherHours)} more from Houzz, calls and the clock, not added in" else ""),
                     style = MaterialTheme.typography.bodySmall, color = Board.grey)
             }
             // the company calendar
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Lbl("On the company calendar")
-                if (appts.isEmpty()) Text("Nothing on the calendar for this job.", style = MaterialTheme.typography.bodySmall, color = Board.grey)
-                Column(Modifier.border(0.dp, Color.Transparent)) {
-                    appts.take(if (full) 20 else 4).forEach { a ->
-                        Row(Modifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.padding(top = 6.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).background(Board.blue))
-                            Num(d8(a.str("start", "at", "when")) ?: (a.str("start", "at", "when") ?: ""), 13, modifier = Modifier.width(84.dp))
-                            Text(a.str("title", "what", "summary") ?: "", style = MaterialTheme.typography.bodyMedium, color = Board.body)
-                        }
-                    }
+                // past (greyed, the last two), then TODAY, then what is ahead - so the list always opens on today's date
+                val past = appts.filter { localDayOf(it.str("start_at", "start", "at", "when")) < todayIso }
+                val ahead = appts.filter { localDayOf(it.str("start_at", "start", "at", "when")) >= todayIso }
+                Column {
+                    past.forEach { a -> CalRow(apptWhen(a) ?: "", apptWhat(a) ?: "Appointment", Board.grey, Board.border) }
+                    CalRow("Today " + LocalDate.now().format(MDAY), if (ahead.isEmpty()) "Nothing booked ahead for this job." else "", Board.red, Board.red)
+                    ahead.take(if (full) 20 else 4).forEach { a -> CalRow(apptWhen(a) ?: "", apptWhat(a) ?: "Appointment", Board.ink, Board.blue) }
                 }
             }
             // the tools: real actions, one tap each
             val open = d.clock?.arrOf("open")?.objects()?.firstOrNull { it.num("project_id")?.toInt() == d.id }
             val anyOpen = d.clock?.arrOf("open")?.size() ?: 0
             Divider(color = Board.borderSoft)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (open != null) Tool("Clock out", !writing) { room.clockOut(d.id) }
                 else Tool("Clock in", !writing && anyOpen == 0) { room.clockIn(d.id) }
                 if (phone != null) Tool("Call") { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
@@ -642,7 +702,7 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
             }
             var removing by remember { mutableStateOf(false) }
             val st = (c?.str("status") ?: "").lowercase()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (st in setOf("lead", "estimating", "quoted")) Solid("Award - they signed", Board.green, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.award(d.id) }
                 if (st == "approved") Solid("Start on site", Board.rust, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.setStatus(d.id, "active") }
                 if (st == "active") Solid("To punch list", Board.rust, enabled = !writing, modifier = Modifier.heightIn(min = 36.dp)) { room.setStatus(d.id, "punch") }
@@ -708,13 +768,20 @@ private fun ClientCard(room: RoomViewModel, d: RoomData, writing: Boolean, full:
 
 // ------------------------------------------------------------------ Caroline: all communications with the client; Enter is a new line
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CarolineCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: Boolean, onOpen: () -> Unit) {
     val first = firstName(d.card)
     var filter by rememberSaveable { mutableStateOf("all") }
     val calls = d.client?.arrOf("calls")?.objects().orEmpty().map { Triple(it.str("started_at", "at", "created_at") ?: "", "Call", it.str("summary", "outcome", "transcript_summary") ?: "(call on file)") }
     val texts = d.client?.arrOf("messages", "texts")?.objects().orEmpty().map { Triple(it.str("created_at", "at") ?: "", if (it.str("direction") == "inbound") "Text from $first" else "Text to $first", it.str("body", "text") ?: "") }
-    val orders = d.thread?.rowsOf("messages")?.objects().orEmpty().map { Triple(it.str("at") ?: "", if (it.str("from") == "tyler") "You" else "Caroline", it.str("text") ?: "") }
+    // her thread is the whole office's; on a client's board only the messages that name this client belong (it showed the morning
+    // rundown under "All communications with Barbara")
+    val who = listOfNotNull(d.card?.str("client_name", "client")?.trim()?.takeIf { it.length > 2 }, first.takeIf { it.length > 2 && it != "the client" },
+        d.card?.str("client_phone", "phone")?.filter { it.isDigit() }?.takeLast(10)?.takeIf { it.length == 10 })
+    val orders = d.thread?.rowsOf("messages")?.objects().orEmpty()
+        .filter { m -> val t = m.str("text") ?: ""; who.any { w -> t.contains(w, ignoreCase = true) || (w.all { ch -> ch.isDigit() } && t.filter { ch -> ch.isDigit() }.contains(w)) } }
+        .map { Triple(it.str("at") ?: "", if (it.str("from") == "tyler") "You" else "Caroline", it.str("text") ?: "") }
     val rows = when (filter) { "calls" -> calls; "texts" -> texts; "emails" -> emptyList(); "orders" -> orders; else -> calls + texts + orders }
         .sortedByDescending { it.first }
     BoardCard(strong = Board.blue, padding = 18) {
@@ -724,7 +791,7 @@ private fun CarolineCard(room: RoomViewModel, d: RoomData, writing: Boolean, ful
                 Text("All communications with $first", style = MaterialTheme.typography.bodySmall, color = Board.grey)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("all" to "All", "calls" to "Calls", "texts" to "Texts", "emails" to "Emails", "orders" to "Your orders").forEach { (k, l) ->
                 if (filter == k) Solid(l, Board.blue, modifier = Modifier.heightIn(min = 34.dp)) { } else Tool(l) { filter = k }
             }
@@ -930,6 +997,11 @@ private fun LogsCard(room: RoomViewModel, d: RoomData, writing: Boolean, full: B
         rows.take(if (full) 200 else 3).forEach { h ->
             var editing by remember(h) { mutableStateOf(false) }
             Divider(color = Board.borderSoft)
+            if (!full) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Num(d8(h.str("work_date")) ?: (h.str("work_date") ?: ""), 12)
+                Text(listOfNotNull(fmtH(h.num("hours") ?: 0.0), h.str("source_kind")?.let { "from $it" }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Board.ink)
+                h.str("note")?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Board.grey, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+            } else
             Row(Modifier.fillMaxWidth().clickable(enabled = full) { editing = !editing }.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                 Num(d8(h.str("work_date")) ?: (h.str("work_date") ?: ""), 12, modifier = Modifier.width(56.dp))
                 Column(Modifier.weight(1f)) {
@@ -1098,6 +1170,11 @@ private fun SelectionsCard(room: RoomViewModel, d: RoomData, writing: Boolean, f
         if (rows.isEmpty()) Dashed("No selections recorded yet.")
         rows.take(if (full) 200 else 6).forEach { m ->
             Divider(color = Board.borderSoft)
+            // folded into a narrow board column the label sits over the line, so the words keep the card's whole width
+            if (!full) Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Lbl((m.str("supplier")?.takeIf { it.isNotBlank() } ?: humanStatus(m.str("status")) ?: "item"))
+                Text(m.str("line") ?: m.str("item") ?: "", style = MaterialTheme.typography.bodySmall, color = Board.ink)
+            } else
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                 Lbl((m.str("supplier")?.takeIf { it.isNotBlank() } ?: humanStatus(m.str("status")) ?: "item"), modifier = Modifier.width(78.dp).padding(top = 2.dp))
                 Column(Modifier.weight(1f)) {

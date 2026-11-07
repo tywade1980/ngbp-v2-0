@@ -177,7 +177,7 @@ private fun DayLine(day: LocalDate) {
 }
 
 @Composable
-private fun TextBubble(m: JsonObject) {
+internal fun TextBubble(m: JsonObject) {
     val you = m.str("from") == "you"
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (you) Arrangement.End else Arrangement.Start) {
         Surface(color = if (you) Board.blue else Color.White, shape = RoundedCornerShape(16.dp, 16.dp, if (you) 4.dp else 16.dp, if (you) 16.dp else 4.dp), modifier = Modifier.widthIn(max = 300.dp)) {
@@ -190,7 +190,7 @@ private fun TextBubble(m: JsonObject) {
 }
 
 @Composable
-private fun CallHistoryRow(c: JsonObject) {
+internal fun CallHistoryRow(c: JsonObject) {
     val dir = c.str("from")
     val outcome = c.str("outcome")
     val missed = outcome == "missed" || outcome == "rejected" || outcome == "blocked" || outcome == "voicemail"
