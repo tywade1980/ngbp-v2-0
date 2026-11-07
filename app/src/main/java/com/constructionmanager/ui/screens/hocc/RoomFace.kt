@@ -219,11 +219,16 @@ object RoomFaces {
         }
 
         // daily logs: the record's hours entries, his words kept as he said them
+        // his own words for the day first; GPS-only days say so in a line ("On site by GPS, 3.79 hr"), never the raw trip list
         val logs = d.hours?.rowsOf("entries")?.objects().orEmpty().mapNotNull { e ->
             val dd = day(e.str("work_date", "started_at")) ?: return@mapNotNull null
-            FaceLog(dd, e.str("note")?.takeIf { it.isNotBlank() } ?: "", e.num("hours"))
-        }.groupBy { it.date }.map { (dd, rows) ->
-            FaceLog(dd, rows.map { it.words }.filter { it.isNotBlank() }.joinToString(" · "), rows.sumOf { it.hours ?: 0.0 })
+            Triple(dd, e, e.str("source_kind") == "location")
+        }.groupBy { it.first }.map { (dd, rows) ->
+            val words = rows.filter { !it.third }.mapNotNull { it.second.str("note")?.takeIf { n -> n.isNotBlank() } }
+            val gps = rows.filter { it.third }.sumOf { it.second.num("hours") ?: 0.0 }
+            val logged = rows.filter { !it.third }.sumOf { it.second.num("hours") ?: 0.0 }
+            val line = words.joinToString(" · ").ifBlank { if (gps > 0) "On site by GPS, ${JobPlan.hrs(gps)}." else "" }
+            FaceLog(dd, line, if (logged > 0) logged else gps)
         }.sortedByDescending { it.date }
 
         val photos = d.attachments?.rowsOf("attachments", "items")?.objects().orEmpty()

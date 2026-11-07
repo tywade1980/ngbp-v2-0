@@ -239,9 +239,11 @@ private fun CardShell(c: FaceCard, wide: Boolean, modifier: Modifier, onOpen: (F
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(c.title, fontFamily = Board.disp, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = if (c == FaceCard.Caro) Face.blue else Face.ink,
-                modifier = Modifier.weight(1f), maxLines = 1)
+                maxLines = 1, softWrap = false)
             if (wide) Text(if (c == FaceCard.Caro) "Front desk · voice first" else "Kept by ${c.owner}", fontFamily = Board.sans, fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp, color = Face.mute, maxLines = 1)
+                fontSize = 11.sp, color = Face.mute, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                modifier = Modifier.weight(1f))
+            else Spacer(Modifier.weight(1f))
             else {
                 IconBox(Icons.Default.KeyboardArrowUp, "Move ${c.title} up") { onMove(c, -1) }
                 IconBox(Icons.Default.KeyboardArrowDown, "Move ${c.title} down") { onMove(c, 1) }
@@ -264,8 +266,8 @@ private fun IconBox(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 private fun CardContent(c: FaceCard, f: RoomFace, photo: @Composable (String) -> Unit) {
     when (c) {
         FaceCard.Est -> {
-            if (f.estimates.isEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                body("No estimate on record here", 14, FontWeight.SemiBold); find()
+            if (f.estimates.none { it.a != "Hours left" }) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                body("No estimate on record here", 14, FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false)); find()
             }
             f.estimates.forEach { row(it.a, it.b) }
         }
@@ -315,7 +317,7 @@ private fun SchedContent(f: RoomFace) {
                 val c = if (isToday) Face.today else Face.mute
                 Text(d.date.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, Locale.US), fontSize = 10.sp, color = c, fontFamily = Board.sans,
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal)
-                Text(d.date.dayOfMonth.toString(), fontSize = 10.sp, color = c, fontFamily = Board.mono, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal)
+                Text(d.date.dayOfMonth.toString(), fontSize = 9.sp, color = c, fontFamily = Board.mono, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal, maxLines = 1, softWrap = false)
             }
         }
     }
@@ -398,7 +400,7 @@ private fun ClientFace(f: RoomFace, modifier: Modifier, scroll: Boolean, onOpen:
             }
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (f.phone != null) num(f.phone, 14, FontWeight.Medium) else find("phone, on Caroline's card")
+                if (f.phone != null) num(phoneWords(f.phone), 14, FontWeight.Medium) else find("phone, on Caroline's card")
                 if (f.email != null) body(f.email, 14) else meta("No email on file")
             }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Face.blueSoft).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -409,12 +411,20 @@ private fun ClientFace(f: RoomFace, modifier: Modifier, scroll: Boolean, onOpen:
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     lbl("Money"); Text("Kept by Ledger", fontFamily = Board.sans, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Face.mute)
                 }
-                if (f.contract != null) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (f.contract != null) BoxWithConstraints {
+                    if (maxWidth >= 380.dp) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         tile("Contract", money(f.contract), Modifier.weight(1f))
                         tile("Paid", f.paid?.let { money(it) }, Modifier.weight(1f), findIfNull = true)
                         tile("Balance", f.balance?.let { money(it) }, Modifier.weight(1f))
+                    } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        tile("Contract", money(f.contract), Modifier.fillMaxWidth())
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            tile("Paid", f.paid?.let { money(it) }, Modifier.weight(1f), findIfNull = true)
+                            tile("Balance", f.balance?.let { money(it) }, Modifier.weight(1f))
+                        }
                     }
+                }
+                if (f.contract != null) {
                     val pct = f.pctPaid
                     if (pct != null) {
                         Row(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(Face.card2).border(1.dp, Face.line, RoundedCornerShape(6.dp))) {
@@ -443,8 +453,10 @@ private fun ClientFace(f: RoomFace, modifier: Modifier, scroll: Boolean, onOpen:
 private fun tile(label: String, value: String?, modifier: Modifier, findIfNull: Boolean = false, findWhat: String? = null) {
     Column(modifier.clip(RoundedCornerShape(8.dp)).background(Face.card2).border(1.dp, Face.line, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        lbl(label)
-        if (value != null) Text(value, fontFamily = Board.mono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Face.ink, lineHeight = 22.sp)
+        Text(label.uppercase(), fontFamily = Board.sans, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.08.sp * 11, color = Face.mute,
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
+        if (value != null) Text(value, fontFamily = Board.mono, fontWeight = FontWeight.SemiBold, fontSize = if (value.length > 9) 15.sp else 18.sp, color = Face.ink,
+            lineHeight = 22.sp, maxLines = 1, softWrap = false)
         else if (findIfNull) find(findWhat) else num("—", 18)
     }
 }
@@ -501,6 +513,12 @@ fun dayLine(plans: List<Plan>, today: LocalDate): String {
         if (d.rows.isEmpty()) null else "${p.input.name}: " + d.rows.joinToString("; ") { it.bar.task.title }
     }
     return if (parts.isEmpty()) "Nothing planned today" else parts.joinToString(" · ")
+}
+
+/** "+16147464390" as he reads it: "(614) 746-4390". Anything else stays as written. */
+fun phoneWords(raw: String): String {
+    val d = raw.filter { it.isDigit() }.let { if (it.length == 11 && it.startsWith("1")) it.drop(1) else it }
+    return if (d.length == 10) "(${d.substring(0, 3)}) ${d.substring(3, 6)}-${d.substring(6)}" else raw
 }
 
 @Suppress("unused") private val keepDp: Dp = 0.dp
