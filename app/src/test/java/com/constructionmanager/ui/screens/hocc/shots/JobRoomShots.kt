@@ -1,6 +1,14 @@
 package com.constructionmanager.ui.screens.hocc.shots
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.ide.common.rendering.api.SessionParams
@@ -56,7 +64,18 @@ abstract class ShotBase(widthPx: Int, heightPx: Int) {
     private fun plan(d: RoomData): Plan? = d.schedule?.let { JobPlan.fromSchedule(d.id, d.card?.get("name")?.asString ?: "Job", it).input }
         ?.let { JobPlan.compute(it, today) }
 
-    protected fun shoot(file: String, wide: Boolean) {
+    /*
+     * Paparazzi shrinks every picture to 1000 px on its long side, so a whole folded stack in one picture is too small to read.
+     * A folded shot is drawn as one tall page (pageDp high) and photographed one screen at a time: part k shows the page from
+     * k screens down.
+     */
+    @Composable
+    private fun Paged(part: Int?, pageDp: Int, screenDp: Int, content: @Composable () -> Unit) {
+        if (part == null) { content(); return }
+        Box(Modifier.wrapContentHeight(align = Alignment.Top, unbounded = true).requiredHeight(pageDp.dp).offset(y = (-part * screenDp).dp)) { content() }
+    }
+
+    protected fun shoot(file: String, wide: Boolean, part: Int? = null, pageDp: Int = 2600, screenDp: Int = 640) {
         assumeTrue("no record snapshot here", dir != null)
         val j = read(file)
         assumeTrue("no $file", j != null)
@@ -71,18 +90,18 @@ abstract class ShotBase(widthPx: Int, heightPx: Int) {
         val header = FaceHeader(today, count, dayLine(plans, today), null, tonight.size)
         paparazzi.snapshot {
             MaterialTheme(colorScheme = Board.colors, typography = Board.typography) {
-                JobRoomFace(face, header, wide = wide, onOpen = {}, onJobs = {}, onTonight = {})
+                Paged(part, pageDp, screenDp) { JobRoomFace(face, header, wide = wide, onOpen = {}, onJobs = {}, onTonight = {}) }
             }
         }
     }
 
-    protected fun shootList() {
+    protected fun shootList(part: Int? = null, pageDp: Int = 1920, screenDp: Int = 640) {
         assumeTrue("no record snapshot here", dir != null)
         val jobs = read("jobs.json")?.getAsJsonArray("projects")?.objects().orEmpty()
         assumeTrue("no jobs.json", jobs.isNotEmpty())
         paparazzi.snapshot {
             MaterialTheme(colorScheme = Board.colors, typography = Board.typography) {
-                FaceJobsList(RoomFaces.list(jobs, today), null, "", {}, {}, null, leadsOpen = false, onLeadsOpen = {})
+                Paged(part, pageDp, screenDp) { FaceJobsList(RoomFaces.list(jobs, today), null, "", {}, {}, null, leadsOpen = false, onLeadsOpen = {}) }
             }
         }
     }
@@ -96,8 +115,13 @@ class FoldOpenShots : ShotBase(2160, 2400) {
     @Test fun mills() = shoot("job-2.json", wide = true)
 }
 
-/** The Fold7 folded: about 412 dp wide, tall so the whole stack shows. */
-class FoldedShots : ShotBase(1236, 7200) {
-    @Test fun humphrey() = shoot("job-80.json", wide = false)
-    @Test fun jobsTab() = shootList()
+/** The Fold7 folded: about 412 dp wide, photographed one 640 dp screen at a time. */
+class FoldedShots : ShotBase(1236, 1920) {
+    @Test fun humphrey0() = shoot("job-80-filled.json", wide = false, part = 0)
+    @Test fun humphrey1() = shoot("job-80-filled.json", wide = false, part = 1)
+    @Test fun humphrey2() = shoot("job-80-filled.json", wide = false, part = 2)
+    @Test fun humphrey3() = shoot("job-80-filled.json", wide = false, part = 3)
+    @Test fun jobsTab0() = shootList(part = 0)
+    @Test fun jobsTab1() = shootList(part = 1)
+    @Test fun jobsTab2() = shootList(part = 2)
 }
