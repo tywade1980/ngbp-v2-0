@@ -136,7 +136,9 @@ object RoomFaces {
         val (street, _) = splitAddress(p.str("address"))
         val who = p.str("client_name", "client")?.takeIf { it.isNotBlank() } ?: p.str("name") ?: "Job #$id"
         val title = listOfNotNull(street, who).joinToString(" · ")
-        return FaceListItem(id, FaceStage.of(p.str("status"), hasVisitAhead(p, today)), title, what(p) ?: "")
+        // a "what" that only repeats the name (or is just "job") says nothing: say plainly the scope isn't written yet
+        val w = what(p)?.takeUnless { w -> w.length < 6 || w.equals("job", true) || w.equals(who, true) || who.contains(w, true) || w.equals(p.str("name"), true) && w.length < 20 && who.contains(w.split(' ').first(), true) }
+        return FaceListItem(id, FaceStage.of(p.str("status"), hasVisitAhead(p, today)), title, w ?: "Scope not written yet")
     }
 
     /** The Leads and jobs list: the room stages first, in the prototype's order, then the leads; done jobs are left off. */
