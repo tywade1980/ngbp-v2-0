@@ -202,6 +202,7 @@ fun JobRoomFace(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Face.ground)) {
         val gridH = maxOf(maxHeight * 0.72f, 560.dp)
+        val caroMax = maxOf(maxHeight * 0.31f, 220.dp)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             FaceHeaderBar(header, onJobs, onTonight)
@@ -215,7 +216,7 @@ fun JobRoomFace(
                         listOf(FaceCard.Scope, FaceCard.Sel, FaceCard.Photos).forEach { c -> CardShell(c, true, Modifier.weight(1f), onOpen, onMove) { CardContent(c, face, photo) } }
                     }
                 }
-                CardShell(FaceCard.Caro, true, Modifier.heightIn(max = maxOf(maxHeight * 0.31f, 220.dp)), onOpen, onMove) { CaroContent(face, wide = true) }
+                CardShell(FaceCard.Caro, true, Modifier.heightIn(max = caroMax), onOpen, onMove) { CaroContent(face, wide = true) }
             } else {
                 order.forEach { c ->
                     when (c) {
